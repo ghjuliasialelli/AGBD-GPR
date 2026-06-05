@@ -128,16 +128,3 @@ Set `DATA_ROOT` and provide the inputs in `DATA.md`, then:
 hyper-parameters of Table 2's recommended configuration (config VII) are the defaults in
 `src/kriging/kriging.sh`. For an exact software environment, generate a lockfile from your
 install (`conda env export --no-builds > environment.lock.yml`).
-
-## Scope / notes
-
-This is a cleaned, paper-focused extraction from a larger research monorepo. Relative to the
-original code:
-
-- Only the **BioFiLM** architecture (`nico_film`) is kept; other architectures explored during
-  development (U-Net variants, FCN, MLP, linear probe, Gaussian heads, plain NicoNet) were removed.
-- **Teacher/student distillation** and **timeseries (TS)** code paths were removed entirely.
-- Unrelated sub-projects (Mozambique site, AEF/TESSERA, canopy-height baselines, region
-  generalisation ablations) are **not** included.
-- All scripts compile under Python 3.10; end-to-end runs require the data in DATA.md and a GPU.
-- Weights & Biases is optional (off by default); machine-specific hostname branches were removed in favour of `DATA_ROOT` (see config.py).
