@@ -1,8 +1,7 @@
 # BioFiLM + GPR for bias correction of satellite-based biomass estimates
 
 Code for the paper **"Gaussian Process Regression for Bias Correction of Satellite-based
-Biomass Estimates"** (Sialelli, Peters, Scheibenreif, Wegner, Schindler; ISPRS Journal of
-Photogrammetry and Remote Sensing).
+Biomass Estimates"** (Sialelli, Peters, Scheibenreif, Wegner, Schindler).
 
 The repository contains two contributions:
 
