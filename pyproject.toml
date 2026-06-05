@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biofilm-gpr-agb"
+version = "0.1.0"
+description = "BioFiLM + Gaussian Process Regression for bias correction of satellite-based AGB estimates"
+requires-python = ">=3.9"
+
+[tool.setuptools]
+py-modules = ["config", "wandb_utils"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

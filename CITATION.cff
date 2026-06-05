@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the paper below."
+title: "Gaussian Process Regression for Calibration of Satellite-based Above-ground Biomass Estimates"
+type: software
+authors:
+  - given-names: Ghjulia
+    family-names: Sialelli
+    affiliation: "Photogrammetry and Remote Sensing, ETH Zurich; ETH AI Center"
+    email: gsialelli@ethz.ch
+  - given-names: Torben
+    family-names: Peters
+    affiliation: "Photogrammetry and Remote Sensing, ETH Zurich"
+  - given-names: Linus
+    family-names: Scheibenreif
+    affiliation: "Photogrammetry and Remote Sensing, ETH Zurich"
+  - given-names: Jan Dirk
+    family-names: Wegner
+    affiliation: "EcoVision Lab, DM3L, University of Zurich"
+  - given-names: Konrad
+    family-names: Schindler
+    affiliation: "Photogrammetry and Remote Sensing, ETH Zurich"
+license: MIT
+# repository-code: "https://github.com/<your-org>/biofilm-gpr-agb"   # add on release
+preferred-citation:
+  type: article
+  title: "Gaussian Process Regression for Calibration of Satellite-based Above-ground Biomass Estimates"
+  authors:
+    - given-names: Ghjulia
+      family-names: Sialelli
+    - given-names: Torben
+      family-names: Peters
+    - given-names: Linus
+      family-names: Scheibenreif
+    - given-names: Jan Dirk
+      family-names: Wegner
+    - given-names: Konrad
+      family-names: Schindler
+  # journal: "ISPRS Journal of Photogrammetry and Remote Sensing"        # add when available
+  # year: 2026        # add when available
+  # doi: 10.xxxx/xxxxx        # add when available
