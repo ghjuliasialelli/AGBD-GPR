@@ -22,7 +22,7 @@ import argparse
 import numpy as np
 import torch
 from model.parser import str2bool, StrOrNone
-from inference.inference_residuals import init_args_dataset
+from inference.inference_helper import init_args_dataset
 import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 import h5py

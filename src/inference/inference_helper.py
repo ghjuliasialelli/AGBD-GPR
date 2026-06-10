@@ -541,3 +541,23 @@ def process_S2_tile(product, path_s2) :
             processed_bands[band] = band_data
 
     return _transform, upsampling_shape, processed_bands, crs, bounds, boa_offset, lat_cos, lat_sin, lon_cos, lon_sin, meta
+
+
+def init_args_dataset(args) :
+
+    default_args = {'augment': False, 'norm': False, 'chunk_size': 1, 'model_idx': None, 'film': False, 'latlon': True, 'ch': False, 'bands': None, 's1': False, 'alos': False, \
+                    'lc': False, 'dem': False, 'gedi_dates': False, 's2_dates': False, 's2_day': False, 's2_doy': False, 'topo': False, 'aspect': False, 'slope': False, 'ft_cat2vec': False, \
+                    'ft_onehot': False, 'ft_sincos': False, 'emb_cat2vec': False, 'emb_onehot': False, 'emb_dist': False, 'emb_sincos': False, 'residuals': False, 'res_norm': False, \
+                    'res_film': False, 'res_in': False, 'res_in_central': False, 'res_in_patch': False, 'biome_dim': 128, 'emb_dim': None, 'linear_emb': False, 'region': False, 'biome': False, \
+                    'debug_film': False, 'bn': 'yes', 'rh98_film': False, 'prob_norm': False, 'debug_latlon': False, 'new_stats': False, 'n_epochs': 100, 'limit': False, 'batch_size': 256, \
+                    'years': None, 'channel_dims': None, 'downsample': False, \
+                    'max_pool': False, 'leaky_relu': False, 'num_sepconv_blocks': 8, 'num_sepconv_filters': 728, 'long_skip': False, 'only_entry': False, 'lr': 0.0001, 'step_size': 30, \
+                    'gamma': 0.1, 'l2': 0.0, 'patience': 3, 'min_delta': 0.0, 'reweighting': None, 'tile_name': None, 'clip': True, 'output_path': None, 'n_models': None, 'patch_size': [25, 25], \
+                    'crop': False, 'padding_mode': 'zeros', 'mixed': False, 'ndvi': False, 'teacher': '', 'teacher_inpaint': False, 'returns': 'dense', 'agb_residuals': False, \
+                    'agb_residuals_film': False, 'agb_residuals_file': 'N/A', 'agb_res_all': False, 'agb_res_one': 'N/A', 'log_transform' : False, 'sim_dist': False, 'hold_out_region': None,
+                    'lite_eval_big': False, 'lite_chunk_size': 1, 'aef': False, 'aef_bands': None, 'keep_region': False, 'drop_overlaps': False, 'tessera': False, 'temp_ablation': False,
+                    'trained_years': [], 'years_stats': None, 'subsample_2020': False}
+    for key, value in default_args.items() :
+        if key not in args : setattr(args, key, value)
+
+    return args
