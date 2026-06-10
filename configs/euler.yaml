@@ -1,0 +1,34 @@
+# Environment config for the ETH `euler` cluster.
+#
+# Selected automatically by src/config.py when the hostname starts with `eu-`
+# (login/compute nodes), or explicitly with `export AGBD_ENV=euler`. `data_root`
+# can be overridden at runtime with `export DATA_ROOT=/somewhere/else`.
+#
+# This is the `Data/`-prefixed layout used on Euler. Adjust `data_root` to your
+# actual data location on the cluster.
+#
+# NOTE: confirm `data_root` below matches your Euler storage before running.
+
+data_root: /cluster/work/igp_psr/gsialelli
+
+paths:
+  norm:         "{data_root}/Data/patches"                                             # AGBD HDF5 patches + norm stats
+  tiles:        "{data_root}/Data/S2_L2A"                                              # Sentinel-2 L2A products / composites
+  ch:           "{data_root}/EcosystemAnalysis/Models/Nico/global-canopy-height-model" # canopy height
+  ckpt:         "{data_root}/EcosystemAnalysis/Models/Biomes/weights"                  # BioFiLM checkpoints (+ *.pkl cfg sidecars)
+  alos:         "{data_root}/Data/ALOS"                                                # ALOS PALSAR
+  dem:          "{data_root}/Data/ALOS"                                                # ALOS DSM (same root as PALSAR)
+  lc:           "{data_root}/Data/LC"                                                  # Copernicus land cover (biome)
+  region:       "{data_root}/Data"                                                     # s2_tile_to_region-v3.pkl
+  embeddings:   "{data_root}/EcosystemAnalysis/Models/Baseline/cat2vec"                # cat2vec embeddings
+  predictions:  "{data_root}/EcosystemAnalysis/Models/Biomes/predictions"              # dense AGB rasters
+  kriging:      "{data_root}/EcosystemAnalysis/Models/Biomes/kriging"                  # kriging intermediates/outputs
+  gedi:         "{data_root}/GEDI"                                                     # GEDI L4A footprints
+  sumatra:      "{data_root}/Sumatra-AGB"                                              # Sumatra reference + rasters
+  s2_index_shp: "{data_root}/BiomassDatasetCreation/Data/download_Sentinel/sentinel_2_index_shapefile.shp"
+
+# Convenience defaults so notebooks/scripts don't hard-code them.
+defaults:
+  arch: nico_film
+  ens_models: ['17997535-1', '17997535-2', '17997535-3']
+  cpus_per_task: 8

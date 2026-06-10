@@ -22,9 +22,9 @@ src/
 ├── sumatra/      Sumatra use case + ESA CCI           (§4.3, Table 3, Fig 6)
 ├── figures/      metrics + plotting for the paper     (Table 2, Figs 4 & 5)
 └── data_prep/    Sentinel-2 compositing / cloud / orbit / region helpers (§4.2.2, §3.1.1)
-configs/          ensemble run-id lists for evaluation
+configs/          per-environment data-path configs (<env>.yaml) + ensemble run-id lists
 scripts/train/    training launchers (BioFiLM ablations, Table 1 / Appendix E.6–E.7)
-config.py         central data paths (set DATA_ROOT)
+config.py         loads configs/<AGBD_ENV>.yaml and exposes DATA_ROOT + all paths
 DATA.md           manifest of the large inputs you must provide
 ```
 
@@ -58,22 +58,36 @@ Python 3.10. The model/inference/kriging code uses PyTorch, PyTorch Lightning an
 `examples/single_tile_pipeline.ipynb` runs the full pipeline for one Sentinel-2 tile —
 composite -> inference -> kriging — by importing and calling the repository's functions
 (`data_prep.composite.composite`, `inference.inference_composite.run_inference`,
-`kriging.kriging.main`). Set `DATA_ROOT`, edit the configuration cell, and run top to bottom.
+`kriging.kriging.main`). Set `AGBD_ENV` (the first cell defaults it to `pf-pc28`), edit the
+configuration cell, and run top to bottom.
 Requires the full environment, a GPU, and the data described in `DATA.md`. See `examples/README.md`.
 
 ## Data
 
 All large inputs (AGBD patches, Sentinel-2/ALOS rasters, GEDI footprints, checkpoints, dense
-prediction rasters, ESA CCI and Sumatra reference products) live outside the repo and are
-addressed through a single setting, **`DATA_ROOT`**:
+prediction rasters, ESA CCI and Sumatra reference products) live outside the repo. Their
+locations are described per environment by a YAML file in **`configs/<env>.yaml`**, which sets
+`data_root` and every data/output sub-path. You select the active environment with the
+**`AGBD_ENV`** variable:
 
 ```bash
-export DATA_ROOT=/mnt/agbd_data      # or edit the default in src/config.py
+export AGBD_ENV=pf-pc28              # loads configs/pf-pc28.yaml (or `euler`, or your own)
 ```
 
-Every path in the codebase derives from it: Python modules do `from config import DATA_ROOT`
-and build `f"{DATA_ROOT}/..."`, and the shell launchers reference `${DATA_ROOT}`. Lay the
-directory out as described in **DATA.md**.
+`AGBD_ENV` is **required** — `import config` raises if it is unset, listing the available
+configs. To add a machine, copy an existing file to `configs/<name>.yaml`, edit `data_root`
+and the `paths:` block, and set `AGBD_ENV=<name>`. Two layouts ship by default: `pf-pc28`
+(flat) and `euler` (a `Data/`-prefixed layout — confirm its `data_root` before use).
+
+`config.py` reads the chosen YAML and exposes `DATA_ROOT`, a `PATHS` dict, and the
+convenience `*_DIR` constants; Python modules do `from config import DATA_ROOT, PATHS, ...`.
+You can still override the root at runtime without editing the YAML:
+
+```bash
+export DATA_ROOT=/mnt/agbd_data      # overrides data_root from the active config
+```
+
+Lay the directory out as described in **DATA.md**.
 
 > Note: because scripts import the top-level `config` module (and the `model`/`inference`/
 > `kriging` packages), run them after `pip install -e .`, or with `PYTHONPATH=src` (needed for
@@ -105,14 +119,14 @@ W&B only for checkpoints trained before sidecars existed (see `load_train_config
 ## Typical workflow
 
 1. **Train BioFiLM** (or use the provided checkpoints): `scripts/train/*.sh` → `src/model/train.py`.
-2. **Generate dense AGB maps**: `src/data_prep/` (composite S2 tiles) → `src/inference/inference.py`.
+2. **Generate dense AGB maps**: `src/data_prep/` (composite S2 tiles) → `src/inference/inference_composite.py`.
 3. **Calibrate with kriging**: `src/kriging/kriging.py` → `predict.py` → `post_merge.py`.
 4. **Reproduce tables/figures**: `src/figures/metrics/` and `src/figures/plots/`.
 5. **Sumatra use case**: `src/sumatra/`.
 
 ## Reproducing the paper
 
-Set `DATA_ROOT` and provide the inputs in `DATA.md`, then:
+Set `AGBD_ENV` (see [Data](#data)) and provide the inputs in `DATA.md`, then:
 
 | Paper artifact | How to produce |
 |----------------|----------------|

@@ -10,11 +10,10 @@ The script can be executed by running: bash inference/inference_composite.sh.
 #######################################################################################################################
 # Imports
 
-from config import DATA_ROOT
+from config import PATHS
 import time
 from os.path import join, isdir, isfile
 import os, pickle, argparse
-WANDB_ENTITY = os.environ.get("WANDB_ENTITY", "")
 import torch
 import numpy as np
 import rasterio as rs
@@ -28,7 +27,6 @@ import warnings
 from model.parser import str2bool
 from datetime import timedelta, datetime
 import pandas as pd
-from inference.inference_residuals import init_args_dataset
 from inference.inference_ds import InferenceDataset_v3
 from torch.utils.data import DataLoader
 
@@ -48,11 +46,9 @@ def inf_parser(argv=None):
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset_path', type = str, required = True, help = 'Path to the dataset')
     parser.add_argument('--year', type = int, required = True, help = 'Year to do inference on.')
     parser.add_argument('--models', type = str, nargs = '+', required = True, help = 'Model names')
     parser.add_argument('--arch', type = str, required = True, help = 'Architecture of the model')
-    parser.add_argument('--entity', type = str, default = f'{WANDB_ENTITY}', help = 'wandb entity for the model.')
     parser.add_argument('--saving_dir', type = str, help = 'Directory in which to save the plots.')
     parser.add_argument("--tile_name", required = True, type = str, help = 'Tile on which to run the prediction.')
     parser.add_argument("--method", required = True, type = str, help = 'Method used for the composites.')
@@ -66,7 +62,7 @@ def inf_parser(argv=None):
     parser.add_argument("--factor", type = float, default = 5, help = 'Factor for the Gaussian weights.')
     args = parser.parse_args(argv)
 
-    return args, args.year, args.dataset_path, args.models, args.arch, args.saving_dir, args.tile_name, args.method, args.patch_size, args.pred_crop, args.masking, args.entity, args.dtype, args.mode, args.std, args.batch_size, args.factor
+    return args, args.year, args.models, args.arch, args.saving_dir, args.tile_name, args.method, args.patch_size, args.pred_crop, args.masking, args.dtype, args.mode, args.std, args.batch_size, args.factor
 
 
 def process_composite(composite, path_tiles, masking):
@@ -279,9 +275,6 @@ def load_input(year, alos_year, paths, tile_name, method, norm_values, cfg, alos
         if isinstance(region, list) : region = region[0] # TODO, later, consider implementing multiple regions compatible code
         region = np.squeeze(one_hot_encode(np.full((1,1), region), 'region_cla').astype(np.float32))
 
-    # Check that the model requires no residuals -----------------------------------------------------------------
-    assert cfg.get('residuals', False) == False, 'Model uses residuals. Please refer to inference_residuals.py'
-
     # Concatenate the data ---------------------------------------------------------------------------------------
     data = torch.from_numpy(np.concatenate(data, axis = -1)).to(torch.float)
     
@@ -435,7 +428,7 @@ class Inference:
         # Initialize the model
         model = Net(model_name = self.arch, in_features = self.args.in_features, num_outputs = self.args.num_outputs, 
                     channel_dims = self.args.channel_dims, max_pool = self.args.max_pool, downsample = None,
-                    leaky_relu = self.args.leaky_relu, patch_size = self.args.patch_size, local = (self.args.dataset_path == 'local'), device = self.device, biome_dim = self.args.biome_dim, emb_dim = self.args.emb_dim,
+                    leaky_relu = self.args.leaky_relu, patch_size = self.args.patch_size, local = False, device = self.device, biome_dim = self.args.biome_dim, emb_dim = self.args.emb_dim,
                     debug_film = self.args.debug_film, bn = self.args.bn, num_sepconv_blocks = self.args.num_sepconv_blocks, 
                     num_sepconv_filters = self.args.num_sepconv_filters, long_skip = self.args.long_skip, only_entry = self.args.only_entry, 
                     linear_emb = self.args.linear_emb, padding_mode = self.args.padding_mode, returns = self.args.returns)
@@ -460,47 +453,22 @@ class Inference:
 def run_inference(argv=None):
     
     # Get the command line arguments and set the global variables
-    args, year, dataset_path, models, arch, saving_dir, tile_name, method, patch_size, pred_crop, masking, entity, dtype, mode, std, batch_size, factor = inf_parser(argv)
+    args, year, models, arch, saving_dir, tile_name, method, patch_size, pred_crop, masking, dtype, mode, std, batch_size, factor = inf_parser(argv)
 
     if tile_name in ['10SFG', '10SFH', '10TEK', '10TEL', '11SLT', '11SLU', '11SLV', '11SMT', '11SMU', '11SMV', '48SXG', '48SYE', '48SYF', '49SDS', '49SDT', '49SDU'] : alos_year = 2019
     else: alos_year = year
 
     # Settings
     set_float32_matmul_precision('high')
-    if (dataset_path == 'local') : cpus_per_task = 8
-    else: 
-        cpus_per_task = int(os.environ.get('SLURM_CPUS_PER_TASK'))
-        if cpus_per_task is None: cpus_per_task = 16
+    cpus_per_task = 8
     device  = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Define the paths
-    if dataset_path == 'local' : 
-        dataset_path = {'norm': f'{DATA_ROOT}/patches',
-                           'tiles': f'{DATA_ROOT}/S2_L2A',
-                           'ch': f'{DATA_ROOT}/CH',
-                           'ckpt': f'{DATA_ROOT}/EcosystemAnalysis/Models/Biomes/weights',
-                           'alos': f'{DATA_ROOT}/ALOS',
-                           'dem': f'{DATA_ROOT}/ALOS',
-                           'lc': f'{DATA_ROOT}/LC',
-                           'region' : f'{DATA_ROOT}/BiomassDatasetCreation/Data/download_Sentinel',
-                           'embeddings': f'{DATA_ROOT}/EcosystemAnalysis/Models/Baseline/cat2vec'
-                           }
-    else:
-        dataset_path = {'norm': f'{DATA_ROOT}/Data/patches',
-                           'tiles': f'{DATA_ROOT}/Data/S2_L2A',
-                           'ch': f'{DATA_ROOT}/EcosystemAnalysis/Models/Nico/global-canopy-height-model',
-                           'ckpt': f'{DATA_ROOT}/EcosystemAnalysis/Models/Biomes/weights',
-                           'alos': f'{DATA_ROOT}/Data/ALOS',
-                           'dem': f'{DATA_ROOT}/Data/ALOS',
-                           'lc': f'{DATA_ROOT}/Data/LC',
-                           'region': f'{DATA_ROOT}/Data',
-                           'embeddings': f'{DATA_ROOT}/EcosystemAnalysis/Models/Baseline/cat2vec'
-                           }
+    # Define the paths (sourced from configs/<env>.yaml via config.PATHS).
+    dataset_path = dict(PATHS)
     dataset_path['saving_dir'] = saving_dir
 
     # We get the config for one of the models
-    cfg = load_train_config(dataset_path['ckpt'], arch, models[0], entity=entity)
-    if cfg['downsample'] : raise Exception('Downsampling is not supported in this script.')
+    with open(join(dataset_path['ckpt'], f'{models[0]}.pkl'), 'rb') as f: cfg = pickle.load(f)
     for key, value in cfg.items(): setattr(args, key, value)
     args = init_args_dataset(args) # add the missing arguments to the config
 
