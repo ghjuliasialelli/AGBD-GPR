@@ -89,6 +89,64 @@ export DATA_ROOT=/mnt/agbd_data      # overrides data_root from the active confi
 
 Lay the directory out as described in **DATA.md**.
 
+### Downloading the data
+
+The large inputs are distributed as a bundle outside GitHub. Download them into `data/`
+with the provided `download.sh` (it also fetches the AGBD HDF5 patches
+`data_subset-2019-v4_*-*.h5`), then use the ready-made `local` config:
+
+```bash
+bash download.sh                 # downloads + extracts the bundle into ./data/
+export AGBD_ENV=local            # loads configs/local.yaml
+export DATA_ROOT="$(pwd)/data"   # or set `data_root` in configs/local.yaml
+```
+
+The bundle is organised as:
+
+```
+data/
+├── example/                       # the single provided tile (30NXM) — composite + inference inputs
+│   ├── S2*_T30NXM_*.zip           #   Sentinel-2 L2A products
+│   ├── ALOS_30NXM_20.tif          #   ALOS PALSAR
+│   ├── DEM_30NXM.tif              #   ALOS DSM
+│   └── LC_30NXM_2019.tif          #   land cover
+├── other/                         # shared model + normalisation inputs
+│   ├── nico_film/                 #   <-- the 4 weight files go in this subfolder (see note)
+│   │   ├── 17997535-1.pkl         #       model config (read by inference)
+│   │   └── 17997535-{1,2,3}_best.ckpt   #  ensemble checkpoints
+│   ├── statistics_subset_2019-2020-v4-1.pkl   # normalisation stats (inference)
+│   ├── s2_tile_to_region-v3.pkl   #   tile -> FiLM region class
+│   ├── embeddings_train.csv       #   cat2vec embeddings
+│   ├── biomes_splits_to_name.pkl  #   train/val/test split (training/eval only)
+│   └── sentinel_2_index_shapefile/  # Sentinel-2 MGRS index (.shp/.dbf/.prj/...)
+├── kriging/                       # kriging inputs
+│   ├── L4A_*-indexed.gpkg         #   GEDI L4A footprints (pass as --path_gedi)
+│   └── valid_2020.txt             #   (also shipped in src/kriging/txt_files/)
+└── Sumatra/                       # Sumatra use case (§4.3)
+    ├── agbd_{100,500,1000}m.tif   #   field/ALS reference maps
+    ├── L4A_Sumatra.gpkg           #   GEDI L4A (Sumatra AOI)
+    ├── GEDI_L4B_AGBD_Sumatra.tif  #   GEDI L4B reference
+    └── CCI_N00E100*.tif           #   ESA CCI biomass (CCI experiment)
+```
+
+`predictions/` and `kriging/` outputs are created by the pipeline; you don't download them.
+
+**What runs with this bundle.** The full example pipeline (composite → inference → kriging)
+for tile 30NXM runs out of the box. Note:
+
+- **Weights must be nested in `other/nico_film/`.** Inference loads checkpoints as
+  `<ckpt>/nico_film/<id>_best.ckpt` (it appends the architecture name), so the 3 `.ckpt`
+  and `17997535-1.pkl` have to be in `other/nico_film/`, not flat in `other/`.
+- **Canopy height is not needed** — the provided checkpoints use `ch=False`.
+- **`.h5` patches are only for training/eval from scratch.** Reproducing with the provided
+  checkpoints does not need them. `train.py`/`eval.py` read them from a hardcoded
+  `<DATA_ROOT>/patches`, so place them in `data/patches/` if you train.
+- **Other tiles:** the `tiles/alos/dem/lc` paths in `configs/local.yaml` point at `example/`;
+  to run on your own tiles, point them at your own S2/ALOS/DEM/LC data.
+- **Sumatra + figures reproduction** (`src/sumatra/`, `src/figures/`) read hardcoded
+  `<DATA_ROOT>/Sumatra-AGB/...`, `<DATA_ROOT>/GEDI/Sumatra/...` paths rather than
+  `local.yaml`; place/symlink the `Sumatra/` files there to reproduce those.
+
 > Note: because scripts import the top-level `config` module (and the `model`/`inference`/
 > `kriging` packages), run them after `pip install -e .`, or with `PYTHONPATH=src` (needed for
 > the hyphen-named figure scripts, which run as files rather than importable modules).

@@ -1,0 +1,54 @@
+# Environment config for a LOCAL machine using the public data bundle.
+#
+#   export AGBD_ENV=local
+#   export DATA_ROOT="$(pwd)/data"        # or edit `data_root` below to an absolute path
+#
+# Paths below point straight at the bundle's folders as `download.sh` lays them out under
+# `data/`  (Sumatra/  example/  kriging/  other/  +  the .h5 patches). Only the
+# composite -> inference -> kriging example pipeline is driven by this file; the training,
+# figures/ and sumatra/ scripts hardcode their own deep paths (see README / DATA.md).
+
+data_root: /ABSOLUTE/PATH/TO/AGBD-GPR/data       # <<< EDIT THIS (or `export DATA_ROOT=...`)
+
+paths:
+  # --- bundle: other/ -------------------------------------------------------------------
+  norm:         "{data_root}/other"      # statistics_subset_2019-2020-v4-1.pkl  (.h5 patches: see note below)
+  region:       "{data_root}/other"      # s2_tile_to_region-v3.pkl
+  embeddings:   "{data_root}/other"      # embeddings_train.csv
+  ckpt:         "{data_root}/other"      # !! weights are loaded as <ckpt>/nico_film/<id>_best.ckpt :
+                                         # !! the 4 weight files (17997535-1.pkl + _{1,2,3}_best.ckpt)
+                                         # !! MUST sit in  other/nico_film/  (download.sh should nest them there).
+  s2_index_shp: "{data_root}/other/sentinel_2_index_shapefile/sentinel_2_index_shapefile.shp"
+
+  # --- bundle: example/  (the single provided tile, 30NXM) ------------------------------
+  tiles:        "{data_root}/example"    # <<< SET YOURSELF for other tiles >>> S2 L2A .zip products
+  alos:         "{data_root}/example"    # <<< SET YOURSELF for other tiles >>> ALOS_<tile>_<yy>.tif
+  dem:          "{data_root}/example"    # <<< SET YOURSELF for other tiles >>> DEM_<tile>.tif
+  lc:           "{data_root}/example"    # <<< SET YOURSELF for other tiles >>> LC_<tile>_2019.tif
+  ch:           "{data_root}/CH"         # <<< SET YOURSELF >>> canopy height — NOT needed for the
+                                         #     provided checkpoints (their config has ch=False)
+
+  # --- bundle: kriging/ -----------------------------------------------------------------
+  gedi:         "{data_root}/kriging"    # GEDI L4A footprints: L4A_*-indexed.gpkg  (pass the file as --path_gedi)
+
+  # --- bundle: Sumatra/  (sumatra/ scripts hardcode deep paths; see README note) --------
+  sumatra:      "{data_root}/Sumatra"    # agbd_{100,500,1000}m.tif, L4A_Sumatra.gpkg, GEDI_L4B_AGBD_Sumatra.tif, CCI_N00E100*.tif
+
+  # --- created by the pipeline (not downloaded) -----------------------------------------
+  predictions:  "{data_root}/predictions"   # dense AGB rasters written by inference
+  kriging:      "{data_root}/kriging"        # kriging outputs (shares the kriging/ folder)
+
+# Convenience defaults so notebooks/scripts don't hard-code them.
+defaults:
+  arch: nico_film
+  ens_models: ['17997535-1', '17997535-2', '17997535-3']
+  cpus_per_task: 8
+
+# NOTES
+# - .h5 patches (data_subset-2019-v4_*-*.h5): needed ONLY to train/eval from scratch, not for
+#   the example pipeline or for reproducing with the provided checkpoints. `train.py`/`eval.py`
+#   read them from a hardcoded `<DATA_ROOT>/patches` (not from `norm` above), so place them in
+#   data/patches/ if you train.
+# - The sumatra/ scripts and src/figures/* read hardcoded `<DATA_ROOT>/Sumatra-AGB/...`,
+#   `<DATA_ROOT>/GEDI/Sumatra/...` and `<DATA_ROOT>/EcosystemAnalysis/...` paths — they do NOT
+#   use the `paths:` above. To reproduce those, place/symlink the Sumatra/ files accordingly.
