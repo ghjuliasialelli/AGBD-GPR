@@ -18,7 +18,7 @@ paths:
   dem:          "{data_root}/ALOS"                                                      # ALOS DSM (same root as PALSAR)
   lc:           "{data_root}/LC"                                                        # Copernicus land cover (biome)
   region:       "{data_root}/BiomassDatasetCreation/Data/download_Sentinel"             # s2_tile_to_region-v3.pkl
-  embeddings:   "{data_root}/EcosystemAnalysis/Models/Baseline/cat2vec"                 # cat2vec embeddings
+  embeddings:   "{data_root}/EcosystemAnalysis/Models/Baseline/cat2vec/AGBD"                 # cat2vec embeddings
   predictions:  "{data_root}/EcosystemAnalysis/Models/Biomes/predictions"               # dense AGB rasters
   kriging:      "{data_root}/EcosystemAnalysis/Models/Biomes/kriging"                   # kriging intermediates/outputs
   gedi:         "{data_root}/GEDI"                                                      # GEDI L4A footprints

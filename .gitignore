@@ -1,2 +1,4 @@
 TODO_FOR_AUTHOR.md
 data/*
+*/__pycache__/*
+*/*/__pycache__/*

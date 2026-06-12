@@ -52,14 +52,14 @@ def inf_parser(argv=None):
     parser.add_argument('--saving_dir', type = str, help = 'Directory in which to save the plots.')
     parser.add_argument("--tile_name", required = True, type = str, help = 'Tile on which to run the prediction.')
     parser.add_argument("--method", required = True, type = str, help = 'Method used for the composites.')
-    parser.add_argument("--batch_size", type = int, default = 2, help = 'Batch size for the dataloader.')
-    parser.add_argument("--patch_size", nargs = 2, type = int, default = [200,200], help = 'Size (height,width) of the patches.')
-    parser.add_argument("--pred_crop", nargs = 4, type = int, default = [0, 0, 0, 0], help = 'Pixels to crop off the predictions (off_ht, off_wl, off_hb, off_wr).')
+    parser.add_argument("--batch_size", type = int, default = 1, help = 'Batch size for the dataloader.')
+    parser.add_argument("--patch_size", nargs = 2, type = int, default = [512, 512], help = 'Size (height,width) of the patches.')
+    parser.add_argument("--pred_crop", nargs = 4, type = int, default = [64, 64, 64, 64], help = 'Pixels to crop off the predictions (off_ht, off_wl, off_hb, off_wr).')
     parser.add_argument("--masking", type = str2bool, default = 'false', help = 'Whether to mask the input.')
     parser.add_argument('--dtype', type = str, default = 'float32', help = 'Data type to save the predictions.')
-    parser.add_argument("--mode", type = str2bool, default = 'false', help = 'Whether to use mode for biome embedding.')
+    parser.add_argument("--mode", type = str2bool, default = 'true', help = 'Whether to use mode for biome embedding.')
     parser.add_argument("--std", type = str2bool, default = 'true', help = 'Whether to compute and save the STDs in case of ensembling.')
-    parser.add_argument("--factor", type = float, default = 5, help = 'Factor for the Gaussian weights.')
+    parser.add_argument("--factor", type = float, default = 6, help = 'Factor for the Gaussian weights.')
     args = parser.parse_args(argv)
 
     return args, args.year, args.models, args.arch, args.saving_dir, args.tile_name, args.method, args.patch_size, args.pred_crop, args.masking, args.dtype, args.mode, args.std, args.batch_size, args.factor
@@ -362,17 +362,19 @@ def efficient_predict_tile_v3(dataloader, models, device, pred_height, pred_widt
         for model_dim, model in enumerate(models) :
 
             preds = predict_patch(model, patch, device, biome_emb)
-            cropped_preds = preds[:, v1s : v2s, h1s : h2s] # crop the predictions to remove the padded data
-            
+
             # Iterate over the predictions
             for i in range(len(preds)) :
-                
+
+                # Crop this patch's prediction to remove the padded data
+                cropped_pred = preds[i, int(v1s[i]) : int(v2s[i]), int(h1s[i]) : int(h2s[i])]
+
                 # Indices to find the position of the patch in summed_predictions and sum_weights
                 indices = (x_indices[i].numpy(), y_indices[i].numpy())
 
                 # Get the weighted prediction for the patch
                 patch_weight = patch_weights[i].numpy()
-                weighted_pred = cropped_preds * patch_weight
+                weighted_pred = cropped_pred * patch_weight
 
                 # Update summed_predictions, taking care of NaN values
                 pred_patch = summed_predictions[(model_dim,) + indices]
@@ -468,7 +470,7 @@ def run_inference(argv=None):
     dataset_path['saving_dir'] = saving_dir
 
     # We get the config for one of the models
-    with open(join(dataset_path['ckpt'], f'{models[0]}.pkl'), 'rb') as f: cfg = pickle.load(f)
+    with open(join(dataset_path['ckpt'], arch, f'{models[0]}.pkl'), 'rb') as f: cfg = pickle.load(f)
     for key, value in cfg.items(): setattr(args, key, value)
     args = init_args_dataset(args) # add the missing arguments to the config
 

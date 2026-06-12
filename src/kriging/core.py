@@ -483,10 +483,10 @@ def get_train_val_data(X, Y, X_val, Y_val, predictions, predictions_val, std, st
     
     # coordinates
     if coords : train_x.append(X[:, None]), train_x.append(Y[:, None]), val_x.append(X_val[:, None]), val_x.append(Y_val[:, None])
-    
-    # auxiliary variable: DEM or STD
-    elif aux == 'STD': train_x.append(std[:, None]), val_x.append(std_val[:, None])
-    elif aux == 'none' : pass
+
+    # auxiliary variable: STD (already normalized upstream in get_data, like eft;
+    # stacked independently of coords to match get_tile_data)
+    if aux == 'STD' : train_x.append(std[:, None]), val_x.append(std_val[:, None])
 
     # predicted AGB values (that we need to process on the fly)
     if pred_vals :

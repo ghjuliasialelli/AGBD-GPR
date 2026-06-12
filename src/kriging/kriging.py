@@ -309,7 +309,7 @@ def get_data(GEDI, GEDI_val, GEDI_hold_out, pred_agb, pred_std, extra_ft, aux, n
         norm_values, og_X_train, og_Y_train, og_X_val, og_Y_val
 
 
-def get_fold(all_GEDI, run, satisfied, s_id, val_holdout, test_holdout, stripe_size, max_train_footprints, path_dem, s2_tile, transform, upsampling_shape, pred_std, test_indices = None, order = ['train', 'test', 'train', 'val'], norm_coords = False, norm_aux = None, max_split_diff = 15) :
+def get_fold(all_GEDI, run, satisfied, s_id, val_holdout, test_holdout, stripe_size, max_train_footprints, path_dem, s2_tile, transform, upsampling_shape, pred_agb, pred_std, aux, extra_ft, width, height, test_indices = None, order = ['train', 'test', 'train', 'val'], norm_coords = False, norm_aux = None, max_split_diff = 15) :
     """
     This function performs the geographical train-test split of the GEDI data, and returns the training, validation, and test sets.
     It also checks that the RMSEs of the training, validation, and test sets are not too different, and reshuffles the data if they are.
@@ -1098,7 +1098,7 @@ def main(argv=None):
             # Repeat until we have a satisfying split
             satisfied, s_id, split_differences = False, 0, []
             while not satisfied and s_id < max_tries :
-                satisfied, s_id, GEDI, GEDI_val, GEDI_hold_out, max_diff, rest = get_fold(all_GEDI, run, False, s_id, val_holdout, test_holdout, stripe_size, mem_max_footprints, path_dem, s2_tile, transform, upsampling_shape, pred_std, test_indices = test_indices, norm_coords = norm_coords, norm_aux = norm_aux, max_split_diff = max_split_diff)
+                satisfied, s_id, GEDI, GEDI_val, GEDI_hold_out, max_diff, rest = get_fold(all_GEDI, run, False, s_id, val_holdout, test_holdout, stripe_size, mem_max_footprints, path_dem, s2_tile, transform, upsampling_shape, pred_agb, pred_std, aux, extra_ft, width, height, test_indices = test_indices, norm_coords = norm_coords, norm_aux = norm_aux, max_split_diff = max_split_diff)
                 if max_diff is not None: split_differences.append(max_diff)
                 else: split_differences.append(np.inf)
 
@@ -1107,7 +1107,7 @@ def main(argv=None):
                 if len(split_differences) == 0 : raise Exception('No valid splits were found, exiting.')
                 print(f'Could not find a satisfying split after {max_tries} attempts. Picking least worst.')
                 s_id = np.argmin(split_differences)
-                _, _, GEDI, GEDI_val, GEDI_hold_out, _, rest = get_fold(all_GEDI, run, True, s_id, val_holdout, test_holdout, stripe_size, mem_max_footprints, path_dem, s2_tile, transform, upsampling_shape, pred_std, test_indices = test_indices, norm_coords = norm_coords, norm_aux = norm_aux, max_split_diff = max_split_diff)
+                _, _, GEDI, GEDI_val, GEDI_hold_out, _, rest = get_fold(all_GEDI, run, True, s_id, val_holdout, test_holdout, stripe_size, mem_max_footprints, path_dem, s2_tile, transform, upsampling_shape, pred_agb, pred_std, aux, extra_ft, width, height, test_indices = test_indices, norm_coords = norm_coords, norm_aux = norm_aux, max_split_diff = max_split_diff)
             if GEDI is None or rest is None: raise Exception('No valid split found, exiting.')
 
             # If need, subsample the training and validation sets to the specified max number of train footprints

@@ -333,7 +333,7 @@ def check_if_exists(save_path, res_band_tuples, calculate_coverage = False, forc
 
     # Otherwise, there is no such data
     else: 
-        all_bands = ['products'] + [band for _, band in res_band_tuples] + ['count'] if calculate_coverage else []
+        all_bands = ['products'] + [band for _, band in res_band_tuples] + (['count'] if calculate_coverage else [])
         return False, all_bands
 
     # Check which files already exist    
