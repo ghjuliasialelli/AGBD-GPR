@@ -207,9 +207,6 @@ class XceptionS2_FiLM(nn.Module):
 
         # train the last layer(s) of the linear regressor
         if not self.freeze_last_mean:
-            print(
-                f'Unfreeze last layer (mean regressor)... args.freeze_last_mean={self.freeze_last_mean}'
-            )
             for param in self.predictions.parameters():
                 param.requires_grad = True
 

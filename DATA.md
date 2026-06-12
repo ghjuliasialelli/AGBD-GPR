@@ -41,12 +41,3 @@ at a directory laid out as below, or edit the paths in `config.py`.
 | ESA CCI biomass product (N00E100 v6, 2021–2022) | `EcosystemAnalysis/Models/Biomes/kriging/predictions/CCI/` | For the CCI calibration experiment. |
 | GEDI L4B reference | `EcosystemAnalysis/.../Sumatra/Data/GEDI_L4B_AGBD_Sumatra.tif` | Used in `get_results.ipynb`. |
 
-## External model dependency (not bundled)
-- `src/data_prep/cloud_mask.py` requires the **cloudSEN12** package and weights
-  (`cloudsen12_models`, ~61 MB). Install from https://github.com/IPL-UV/cloudsen12_models
-  (kept out of this repo to avoid shipping third-party weights).
-
-## Not required for this paper
-`Data/patches/AEF`, `Data/patches/TESSERA`, and `CH/` paths appear in some scripts but
-belong to other projects (AEF / TESSERA / canopy-height) and are not needed to reproduce
-this paper.
