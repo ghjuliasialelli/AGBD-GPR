@@ -41,7 +41,7 @@ if __name__ == '__main__':
     model_name = f'{kriging_model}-{tile_id}'
 
     # Load the trained kriging checkpoint (model tensors + the config saved at fit time)
-    ckpt_path = join(path_kriging, 'checkpoints', kriging_model)
+    ckpt_path = path_kriging
     if not isdir(ckpt_path) : makedirs(ckpt_path, exist_ok=True)
     data = torch.load(join(ckpt_path, f'{model_name}_{s2_tile}.pt'), weights_only=False, map_location='cpu')
     train_x, train_y, likelihood_state, ndims, norm_values = data['train_x'], data['train_y'], data['likelihood_state'], data['ndims'], data['norm_values']
@@ -69,8 +69,8 @@ if __name__ == '__main__':
     random.seed(_seed), np.random.seed(_seed), torch.manual_seed(_seed), torch.cuda.manual_seed_all(_seed)
 
     # Define the path to the dense predictions
-    if composites : s2_path = join(path_predictions, arch, ens_models, f'{s2_tile}_{year}_composite.tif')
-    else : s2_path = join(path_predictions, arch, s2_tile, str(year), ens_models, 'AGB_merged.tif')
+    if composites : s2_path = join(path_predictions, f'{s2_tile}_{year}_composite.tif')
+    else : s2_path = join(path_predictions, f'{s2_tile}_{year}_AGB_merged.tif')
 
     # Load necessary data
     pred_agb, pred_std, pred_mask, meta, transform, upsampling_shape, nodataval = load_dense_preds(s2_path = s2_path, aux = aux)
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     print('Saving the corrected prediction...')
     count = 3 if COMPUTE_VAR else 2
     meta.update(count = count, dtype = 'float32', nodata = np.nan)
-    tif_path = join(path_kriging, 'predictions', arch, s2_tile, str(year), ens_models)
+    tif_path = path_kriging
     with rs.open(join(tif_path, f"kriging-{model_name}.tif"), 'w', **meta) as dst:
         # Write the corrected AGB predictions
         dst.write(corrected, 1)
