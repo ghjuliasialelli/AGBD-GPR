@@ -20,7 +20,6 @@ src/
 ├── inference/    dense AGB map generation             (§4.2.2)
 ├── kriging/      per-tile GPR calibration             (§3.2, §4.2.2, Table 2)
 ├── sumatra/      Sumatra use case + ESA CCI           (§4.3, Table 3, Fig 6)
-├── figures/      metrics + plotting for the paper     (Table 2, Figs 4 & 5)
 └── data_prep/    Sentinel-2 compositing / cloud / orbit / region helpers (§4.2.2, §3.1.1)
 configs/          per-environment data-path configs (<env>.yaml) + ensemble run-id lists
 scripts/train/    training launchers (BioFiLM ablations, Table 1 / Appendix E.6–E.7)
@@ -36,9 +35,6 @@ DATA.md           manifest of the large inputs you must provide
 | §3.1.2 / §4.2.1 training, Table 1 | `src/model/train.py`, `src/model/eval.py`, `scripts/train/` |
 | §4.2.2 dense map generation | `src/inference/inference*.py`, `src/data_prep/` |
 | §3.2 / §4.2.2 kriging, Table 2 | `src/kriging/kriging.py`, `predict.py`, `post_merge.py`, `threshold.py` |
-| Figure 4 (binned residuals) | `src/figures/plots/binned-histogram.py`, `binned-rmse.py` |
-| Figure 5 (spider plots) | `src/figures/plots/biome-spiderplot.py`, `region-spiderplot.py` |
-| Table 2 metrics (RMSE/MAE/ΔB) | `src/figures/metrics/compute_*_RMSE.py`, `compute_*_binned_histogram.py` |
 | §4.3 Sumatra (Table 3) | `src/sumatra/kriging_ours_gedi.py` (our map), `kriging_gedi.py` (ESA CCI), `kriging_downsampled_gedi.py` |
 | Figure 6 (Sumatra maps) | `src/sumatra/compose_figure.py`, `src/sumatra/get_results.ipynb` |
 
@@ -105,15 +101,15 @@ The bundle is organised as:
 
 ```
 data/
+├── AGB.tif  AGB-pre.tif  STD.tif  STD-pre.tif   # reference outputs (comparison only; not read by code)
 ├── example/                       # the single provided tile (30NXM) — composite + inference inputs
 │   ├── S2*_T30NXM_*.zip           #   Sentinel-2 L2A products
 │   ├── ALOS_30NXM_20.tif          #   ALOS PALSAR
 │   ├── DEM_30NXM.tif              #   ALOS DSM
 │   └── LC_30NXM_2019.tif          #   land cover
 ├── other/                         # shared model + normalisation inputs
-│   ├── nico_film/                 #   <-- the 4 weight files go in this subfolder (see note)
-│   │   ├── 17997535-1.pkl         #       model config (read by inference)
-│   │   └── 17997535-{1,2,3}_best.ckpt   #  ensemble checkpoints
+│   ├── 17997535-1.pkl             #   model config (read by inference)
+│   ├── 17997535-{1,2,3}_best.ckpt #   ensemble checkpoints (loaded flat, see note)
 │   ├── statistics_subset_2019-2020-v4-1.pkl   # normalisation stats (inference)
 │   ├── s2_tile_to_region-v3.pkl   #   tile -> FiLM region class
 │   ├── embeddings_train.csv       #   cat2vec embeddings
@@ -134,22 +130,24 @@ data/
 **What runs with this bundle.** The full example pipeline (composite → inference → kriging)
 for tile 30NXM runs out of the box. Note:
 
-- **Weights must be nested in `other/nico_film/`.** Inference loads checkpoints as
-  `<ckpt>/nico_film/<id>_best.ckpt` (it appends the architecture name), so the 3 `.ckpt`
-  and `17997535-1.pkl` have to be in `other/nico_film/`, not flat in `other/`.
+- **Weights are loaded flat from `other/`.** Inference loads checkpoints as
+  `<ckpt>/<id>_best.ckpt` (no architecture subfolder), so the 3 `.ckpt` and the
+  `17997535-1.pkl` config sit directly in `other/` — do not nest them in a subfolder.
+- **Reference outputs** (`AGB.tif`, `AGB-pre.tif`, `STD.tif`, `STD-pre.tif`) ship at the
+  bundle root for comparison only; no code reads them (`-pre` = pre-kriging, the others
+  post-kriging).
 - **Canopy height is not needed** — the provided checkpoints use `ch=False`.
 - **`.h5` patches are only for training/eval from scratch.** Reproducing with the provided
   checkpoints does not need them. `train.py`/`eval.py` read them from a hardcoded
   `<DATA_ROOT>/patches`, so place them in `data/patches/` if you train.
 - **Other tiles:** the `tiles/alos/dem/lc` paths in `configs/local.yaml` point at `example/`;
   to run on your own tiles, point them at your own S2/ALOS/DEM/LC data.
-- **Sumatra + figures reproduction** (`src/sumatra/`, `src/figures/`) read hardcoded
-  `<DATA_ROOT>/Sumatra-AGB/...`, `<DATA_ROOT>/GEDI/Sumatra/...` paths rather than
-  `local.yaml`; place/symlink the `Sumatra/` files there to reproduce those.
+- **Sumatra reproduction** (`src/sumatra/`) reads hardcoded `<DATA_ROOT>/Sumatra-AGB/...`,
+  `<DATA_ROOT>/GEDI/Sumatra/...` paths rather than `local.yaml`; place/symlink the `Sumatra/`
+  files there to reproduce those.
 
 > Note: because scripts import the top-level `config` module (and the `model`/`inference`/
-> `kriging` packages), run them after `pip install -e .`, or with `PYTHONPATH=src` (needed for
-> the hyphen-named figure scripts, which run as files rather than importable modules).
+> `kriging` packages), run them after `pip install -e .`, or with `PYTHONPATH=src`.
 
 ## Logging (Weights & Biases is optional)
 
@@ -170,17 +168,16 @@ sidecar that `train.py` saves next to the checkpoint (`{model}_config.json`), fa
 W&B only for checkpoints trained before sidecars existed (see `load_train_config`).
 
 > A few **analysis/tooling** scripts still query the W&B server to locate trained runs:
-> `model/eval.py`, the full-scale `inference/inference*.py`, and the `figures/metrics/*`
-> scripts when run with `--test_set`. These import `wandb` lazily (only at the lookup), so the
-> modules load fine without it; you need a W&B account only to use those specific lookups.
+> `model/eval.py` and the full-scale `inference/inference*.py` when run with `--test_set`.
+> These import `wandb` lazily (only at the lookup), so the modules load fine without it; you
+> need a W&B account only to use those specific lookups.
 
 ## Typical workflow
 
 1. **Train BioFiLM** (or use the provided checkpoints): `scripts/train/*.sh` → `src/model/train.py`.
 2. **Generate dense AGB maps**: `src/data_prep/` (composite S2 tiles) → `src/inference/inference_composite.py`.
 3. **Calibrate with kriging**: `src/kriging/kriging.py` → `predict.py` → `post_merge.py`.
-4. **Reproduce tables/figures**: `src/figures/metrics/` and `src/figures/plots/`.
-5. **Sumatra use case**: `src/sumatra/`.
+4. **Sumatra use case**: `src/sumatra/`.
 
 ## Reproducing the paper
 
@@ -190,9 +187,7 @@ Set `AGBD_ENV` (see [Data](#data)) and provide the inputs in `DATA.md`, then:
 |----------------|----------------|
 | **Table 1** — BioFiLM vs. baseline RMSE | train: `scripts/train/*.sh` → `src/model/train.py`; evaluate: `python -m model.eval ...` |
 | **Figs 3 / F.9–F.10** — dense AGB maps | `src/data_prep/` (composite) → `python -m inference.inference_composite ...` |
-| **Table 2** — kriging configurations | `bash src/kriging/kriging.sh` (→ `kriging.py` → `predict.py`); metrics: `src/figures/metrics/compute_{pre,post}_RMSE.py`, `compute_{pre,post}_binned_histogram.py` |
-| **Figure 4** — pre/post residuals per bin | `src/figures/plots/binned-histogram.py`, `binned-rmse.py` |
-| **Figure 5** — spider plots (biome / region) | `src/figures/plots/biome-spiderplot.py`, `region-spiderplot.py` |
+| **Table 2** — kriging configurations | `bash src/kriging/kriging.sh` (→ `kriging.py` → `predict.py`) |
 | **Table 3 + Figure 6** — Sumatra (ours & ESA CCI) | `bash src/sumatra/kriging.sh` → `kriging_*gedi.py`; figure: `compose_figure.py`, `get_results.ipynb` |
 | **End-to-end, one tile** | `examples/single_tile_pipeline.ipynb` |
 

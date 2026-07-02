@@ -5,8 +5,8 @@
 #
 # Paths below point straight at the bundle's folders as `download.sh` lays them out under
 # `data/`  (Sumatra/  example/  kriging/  other/  +  the .h5 patches). Only the
-# composite -> inference -> kriging example pipeline is driven by this file; the training,
-# figures/ and sumatra/ scripts hardcode their own deep paths (see README / DATA.md).
+# composite -> inference -> kriging example pipeline is driven by this file; the training
+# and sumatra/ scripts hardcode their own deep paths (see README / DATA.md).
 
 data_root: /ABSOLUTE/PATH/TO/AGBD-GPR/data       # <<< EDIT THIS (or `export DATA_ROOT=...`)
 
@@ -15,9 +15,9 @@ paths:
   norm:         "{data_root}/other"      # statistics_subset_2019-2020-v4-1.pkl  (.h5 patches: see note below)
   region:       "{data_root}/other"      # s2_tile_to_region-v3.pkl
   embeddings:   "{data_root}/other"      # embeddings_train.csv
-  ckpt:         "{data_root}/other"      # !! weights are loaded as <ckpt>/nico_film/<id>_best.ckpt :
-                                         # !! the 4 weight files (17997535-1.pkl + _{1,2,3}_best.ckpt)
-                                         # !! MUST sit in  other/nico_film/  (download.sh should nest them there).
+  ckpt:         "{data_root}/other"      # weights are loaded FLAT as <ckpt>/<id>_best.ckpt (no arch
+                                         # subfolder). The 4 weight files (17997535-1.pkl +
+                                         # _{1,2,3}_best.ckpt) sit directly in  other/ .
   s2_index_shp: "{data_root}/other/sentinel_2_index_shapefile/sentinel_2_index_shapefile.shp"
 
   # --- bundle: example/  (the single provided tile, 30NXM) ------------------------------
@@ -45,10 +45,12 @@ defaults:
   cpus_per_task: 8
 
 # NOTES
+# - Reference outputs (AGB.tif, AGB-pre.tif, STD.tif, STD-pre.tif) ship at the bundle root for
+#   comparison only; no code reads them (-pre = pre-kriging, the others = post-kriging).
 # - .h5 patches (data_subset-2019-v4_*-*.h5): needed ONLY to train/eval from scratch, not for
 #   the example pipeline or for reproducing with the provided checkpoints. `train.py`/`eval.py`
 #   read them from a hardcoded `<DATA_ROOT>/patches` (not from `norm` above), so place them in
 #   data/patches/ if you train.
-# - The sumatra/ scripts and src/figures/* read hardcoded `<DATA_ROOT>/Sumatra-AGB/...`,
+# - The sumatra/ scripts read hardcoded `<DATA_ROOT>/Sumatra-AGB/...`,
 #   `<DATA_ROOT>/GEDI/Sumatra/...` and `<DATA_ROOT>/EcosystemAnalysis/...` paths — they do NOT
 #   use the `paths:` above. To reproduce those, place/symlink the Sumatra/ files accordingly.
