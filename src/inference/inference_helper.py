@@ -283,7 +283,7 @@ def load_train_config(ckpt_dir, arch, model_name, entity=None):
     models trained before sidecars were saved (needs a W&B account and `entity`).
     """
     import os, json
-    sidecar = os.path.join(ckpt_dir, arch, f"{model_name}_config.json")
+    sidecar = os.path.join(ckpt_dir, f"{model_name}_config.json")
     if os.path.isfile(sidecar):
         with open(sidecar) as f:
             return json.load(f)

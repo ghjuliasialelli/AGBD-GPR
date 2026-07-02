@@ -439,7 +439,7 @@ class Inference:
                         patch_size = self.args.patch_size, downsample = self.args.downsample, 
                         loss_fn = self.args.loss_fn, film = self.args.film, debug_film = self.args.debug_film)
     
-        state_dict = torch.load(join(self.paths['ckpt'], self.arch, f'{self.model_name}_best.ckpt'), map_location = torch.device(self.device), weights_only = True)['state_dict']
+        state_dict = torch.load(join(self.paths['ckpt'], f'{self.model_name}_best.ckpt'), map_location = torch.device(self.device), weights_only = True)['state_dict']
         state_dict = {k:v for k,v in state_dict.items() if 'teacher' not in k}
         model.load_state_dict(state_dict) 
         # add the following line if the nico model is not compiled : state_dict = {k.replace('_orig_mod.',''):v for k,v in state_dict.items()}
@@ -470,7 +470,7 @@ def run_inference(argv=None):
     dataset_path['saving_dir'] = saving_dir
 
     # We get the config for one of the models
-    with open(join(dataset_path['ckpt'], arch, f'{models[0]}.pkl'), 'rb') as f: cfg = pickle.load(f)
+    with open(join(dataset_path['ckpt'], f'{models[0]}.pkl'), 'rb') as f: cfg = pickle.load(f)
     for key, value in cfg.items(): setattr(args, key, value)
     args = init_args_dataset(args) # add the missing arguments to the config
 
@@ -524,8 +524,8 @@ def run_inference(argv=None):
 
     # Save the AGB predictions to GeoTIFF, with dtype uint16
     meta.update(driver = 'GTiff', dtype = dtype, count = 2 if len(models) > 1 else 1, compress = 'lzw', nodata = nodata)
-    output_path = join(dataset_path['saving_dir'], arch, '_'.join(models))
-    if not os.path.exists(output_path): os.makedirs(output_path)
+    output_path = dataset_path['saving_dir']
+    if not os.path.exists(output_path): os.makedirs(output_path, exist_ok = True)
     with rs.open(os.path.join(output_path, f'{tile_name}_{year}_composite.tif'), 'w', **meta) as f:
         f.write(avg_preds_variables, 1)
         f.set_band_description(1, 'AGB')

@@ -818,11 +818,11 @@ def main(argv=None):
     random.seed(_seed), np.random.seed(_seed), torch.manual_seed(_seed), torch.cuda.manual_seed_all(_seed)
 
     # Define paths
-    if composites : s2_path = join(path_predictions, arch, '_'.join(ens_models), f'{s2_tile}_{year}_composite.tif')
-    else : 
-        s2_path = join(path_predictions, arch, s2_tile, str(year), '_'.join(ens_models), 'AGB_merged.tif')
-        s2_path_ref = join(path_predictions, arch, '_'.join(ens_models), f'{s2_tile}_{year}_composite.tif')
-    ckpt_path = join(path_kriging, 'checkpoints', model_name.split('-')[0])
+    if composites : s2_path = join(path_predictions, f'{s2_tile}_{year}_composite.tif')
+    else :
+        s2_path = join(path_predictions, f'{s2_tile}_{year}_AGB_merged.tif')
+        s2_path_ref = join(path_predictions, f'{s2_tile}_{year}_composite.tif')
+    ckpt_path = path_kriging
     if not isdir(ckpt_path) : makedirs(ckpt_path, exist_ok=True)
 
     # Load and pre-process the data ###############################################################
@@ -924,7 +924,7 @@ def main(argv=None):
 
     # Get the train/val/test sets #################################################################
     
-    save_dir = join(path_kriging, 'predictions', 'splits')
+    save_dir = path_kriging
     if not isdir(save_dir) : makedirs(save_dir, exist_ok=True)
     _id = model_name.split('-')[-1]
 
@@ -1012,7 +1012,7 @@ def main(argv=None):
                             with open(join(save_dir, fname), 'wb') as f: pickle.dump(split_indices, f)
                             
                             # Copy the .pkl file with the pre- and post-kriging predictions, the reference data and the indices
-                            tif_path = join(path_kriging, 'predictions', arch, s2_tile, str(year), '_'.join(ens_models))
+                            tif_path = path_kriging
                             source = join(tif_path, f"results-{ref_model}-{_id}.pkl")
                             destination = join(tif_path, f"results-{model_name}.pkl")
                             shutil.copy2(source, destination)
@@ -1265,7 +1265,7 @@ def main(argv=None):
 
     if SAVE :
         # Path to the output directory
-        tif_path = join(path_kriging, 'predictions', arch, s2_tile, str(year), '_'.join(ens_models))
+        tif_path = path_kriging
         if not isdir(tif_path) : makedirs(tif_path, exist_ok=True)
         # Save the pre-kriging predictions and GTs at the footprints' locations
         with open(join(tif_path, f"results-{model_name}.pkl"), 'wb') as f:

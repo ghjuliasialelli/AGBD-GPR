@@ -198,8 +198,8 @@ if __name__ == '__main__':
     random.seed(_seed), np.random.seed(_seed)
 
     # Define paths
-    if composites : s2_path = join(path_predictions, arch, '_'.join(ens_models), f'{s2_tile}_{year}_composite.tif')
-    else : s2_path = join(path_predictions, arch, s2_tile, str(year), '_'.join(ens_models), 'AGB_merged.tif')
+    if composites : s2_path = join(path_predictions, f'{s2_tile}_{year}_composite.tif')
+    else : s2_path = join(path_predictions, f'{s2_tile}_{year}_AGB_merged.tif')
 
     # Load and pre-process the data ###############################################################
     time_start = time()
@@ -279,7 +279,7 @@ if __name__ == '__main__':
 
     if SAVE :
         # Path to the output directory
-        tif_path = join(path_kriging, 'predictions', arch, s2_tile, str(year), '_'.join(ens_models))
+        tif_path = path_kriging
         if not isdir(tif_path) : makedirs(tif_path, exist_ok=True)
         # Save the pre-kriging predictions and GTs at the footprints' locations
         with open(join(tif_path, f"{fname}.pkl"), 'wb') as f:
