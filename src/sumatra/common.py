@@ -1,35 +1,106 @@
 """
-Shared helpers for the Sumatra GEDI kriging scripts
-(kriging_gedi / kriging_ours_gedi / kriging_downsampled_gedi).
+Low-level helpers shared by the Sumatra GEDI kriging pipeline.
 
-Byte-identical across those three scripts; extracted verbatim. Depends on kriging.core.
+This module holds the pieces that operate on a single split or a single array:
+  - SplitBundle     : dataclass carrying one train/val/test split (was a 30-element tuple)
+  - get_data        : build a SplitBundle from pre-computed splits
+  - get_extra_features / load_dense_preds : feature computation + prediction loading
+  - parser          : the command-line argument parser (returns an argparse.Namespace)
+  - train_loop / train_with_retries : the GP training loop
+
+The higher-level orchestration (geographic splitting + the end-to-end per-map pipeline)
+lives in sumatra/pipeline.py, and all file paths live in sumatra/paths.py.
+Depends on kriging.core for the GP model and geometry helpers.
 """
 
-from config import DATA_ROOT
+import argparse
+import warnings
+from copy import deepcopy
+from dataclasses import dataclass
+
 import numpy as np
 import rasterio as rs
 import torch
 import gpytorch
 from scipy.ndimage import distance_transform_edt, uniform_filter, sobel, laplace, maximum_filter, minimum_filter
-import argparse
 from linear_operator.utils.errors import NotPSDError
 from linear_operator.utils.warnings import NumericalWarning
-import warnings
-from copy import deepcopy
 from rasterio.transform import Affine
 from rasterio.enums import Resampling
-from kriging.core import *  # shared GP models + helpers
+
+from config import DATA_ROOT
+from kriging.core import equals, float_or_str, str2bool, zero_first_two  # shared helpers (see src/kriging/core.py)
+
+
+@dataclass
+class SplitBundle:
+    """
+    Everything the GP needs about one train/val/test split, in one object (previously passed
+    around as a bare 30-element tuple). Built by get_data() and get_fold(); consumed by
+    run_kriging_for_map() in sumatra/pipeline.py. Fields are grouped train / val / test.
+
+    Any field may be None when it does not apply (e.g. `std*` only when aux == 'STD',
+    `og_*` only when coordinates were normalized, the `*_test` fields only when test_holdout > 0).
+    """
+    residuals: object = None          # prediction - GEDI AGB, per split
+    residuals_val: object = None
+    residuals_test: object = None
+    X: object = None                  # footprint col indices (scaled if norm_coords)
+    Y: object = None                  # footprint row indices (scaled if norm_coords)
+    X_val: object = None
+    Y_val: object = None
+    X_test: object = None             # test indices are never scaled
+    Y_test: object = None
+    gedi_agb: object = None           # reference GEDI AGB, per split
+    gedi_agb_val: object = None
+    gedi_agb_test: object = None
+    predictions: object = None        # model AGB sampled at the footprints, per split
+    predictions_val: object = None
+    predictions_test: object = None
+    agbd_se: object = None            # GEDI standard errors (currently always None)
+    agbd_se_val: object = None
+    agbd_se_test: object = None
+    gedi_dem: object = None           # DEM at footprints (None unless aux uses DEM)
+    gedi_dem_val: object = None
+    std: object = None                # prediction STD at footprints (None unless aux == 'STD')
+    std_val: object = None
+    dem: object = None                # dense DEM array (None here)
+    eft: object = None                # extra-feature vectors at footprints (None if no extra features)
+    eft_val: object = None
+    norm_values: object = None        # dict of normalization stats, for de-normalizing later
+    og_X_train: object = None         # un-scaled pixel indices (kept when norm_coords)
+    og_Y_train: object = None
+    og_X_val: object = None
+    og_Y_val: object = None
 
 def get_data(GEDI, GEDI_val, GEDI_hold_out, pred_agb, pred_std, extra_ft, aux, norm_aux, norm_coords, path_dem, s2_tile, transform, upsampling_shape, width, height, run) :
     """
-    This function extracts necessary data from the splits.
+    Extract, from the train/val/test GEDI splits, everything the GP needs, and return it as the
+    "split bundle" -- a 30-element tuple threaded through get_fold() / get_train_val_test_split()
+    and unpacked in each script's __main__.
 
     Args:
-    - GEDI: geopandas dataframe, training set.
-    - GEDI_val: geopandas dataframe, validation set.
-    - GEDI_hold_out: geopandas dataframe, test set.
+    - GEDI, GEDI_val, GEDI_hold_out: geopandas dataframes for the train / val / test splits.
+    - pred_agb, pred_std: dense AGB prediction and its STD (2D arrays).
+    - extra_ft: (H, W, C) array of extra features, or None.
+    - aux: which auxiliary variable to attach ('STD' or 'none').
+    - norm_aux: 'min_max' to min-max-scale aux/extra features, else False.
+    - norm_coords: if True, divide pixel coords by (width, height).
 
-    Returns: the residuals, indices, AGB values, predictions, standard errors, DEM data, and standard deviation data.
+    Returns (the "split bundle", in order):
+        residuals, residuals_val, residuals_test   prediction - GEDI AGB, per split
+        X, Y                                        train footprint col/row pixel indices (scaled if norm_coords)
+        X_val, Y_val                                val footprint indices
+        X_test, Y_test                              test footprint indices (never scaled)
+        gedi_agb, gedi_agb_val, gedi_agb_test       reference GEDI AGB, per split
+        predictions, predictions_val, predictions_test   model AGB sampled at the footprints, per split
+        agbd_se, agbd_se_val, agbd_se_test          GEDI standard errors (currently always None)
+        gedi_dem, gedi_dem_val                       DEM at footprints (None unless aux uses DEM)
+        std, std_val                                 prediction STD at footprints (None unless aux == 'STD')
+        dem                                          dense DEM array (None here)
+        eft, eft_val                                 extra-feature vectors at footprints (None if no extra_ft)
+        norm_values                                  dict of normalization stats, for de-normalizing later
+        og_X_train, og_Y_train, og_X_val, og_Y_val   un-scaled pixel indices (kept when norm_coords)
     """
 
     # Get the row and column indices
@@ -95,10 +166,11 @@ def get_data(GEDI, GEDI_val, GEDI_hold_out, pred_agb, pred_std, extra_ft, aux, n
         X_val, Y_val = X_val / width, Y_val / height
         # we don't do it on the test set on purpose
 
-    return residuals, residuals_val, residuals_test, X, Y, X_val, Y_val, X_test, Y_test, \
-        gedi_agb, gedi_agb_val, gedi_agb_test, predictions, predictions_val, predictions_test, \
-        agbd_se, agbd_se_val, agbd_se_test, gedi_dem, gedi_dem_val, std, std_val, dem, eft, eft_val, \
-        norm_values, og_X_train, og_Y_train, og_X_val, og_Y_val
+    return SplitBundle(
+        residuals, residuals_val, residuals_test, X, Y, X_val, Y_val, X_test, Y_test,
+        gedi_agb, gedi_agb_val, gedi_agb_test, predictions, predictions_val, predictions_test,
+        agbd_se, agbd_se_val, agbd_se_test, gedi_dem, gedi_dem_val, std, std_val, dem, eft, eft_val,
+        norm_values, og_X_train, og_Y_train, og_X_val, og_Y_val)
 
 
 def get_extra_features(pred_agb, features) :
@@ -241,9 +313,7 @@ def parser():
     parser.add_argument('--stripe_size', type = int, required = True, help = 'Size (in pixels) of a stripe.')
     parser.add_argument('--path_predictions', type = str, required = True, help = 'Directory with the predictions.')
     parser.add_argument('--path_gedi', type = str, required = True, help = 'Directory with the GEDI footprints.')
-    parser.add_argument('--path_geometries', type = str, required = True, help = 'Directory with the S2 tiles geometries.')
     parser.add_argument('--path_dem', type = str, required = True, help = 'Directory with the DEM.')
-    parser.add_argument('--path_kriging', type = str, required = True, help = 'Directory for Kriging.')
     parser.add_argument('--aux', type = str, required = True, help = 'Which auxiliary variable to use.')
     parser.add_argument('--extra_features', type = str, nargs = '+', required = True, help = 'Additional features to compute, if any.')
     parser.add_argument('--norm_aux', type = str, required = True, help = 'Whether to normalize the auxiliary data.')
@@ -283,8 +353,9 @@ def parser():
     if args.norm_aux == 'false' : args.norm_aux = False
     elif args.norm_aux == 'min_max' : args.norm_aux = 'min_max'
     else: raise ValueError(f"norm_aux must be either 'false' or 'min_max', got {args.norm_aux}.")
-    
-    return args.s2_tile, args.year, args.arch, args.ens_models, args.test_holdout, args.val_holdout, args.stripe_size, args.path_predictions, args.path_gedi, args.path_geometries, args.path_dem, args.path_kriging, args.aux, args.extra_features, args.norm_aux, args.norm_coords, args.norm_res, args.coords, args.pred_vals, args.matern_nu, args.num_iterations, args.pos_loss, args.lr, args.max_train_footprints, args.x_lengthscale, args.y_lengthscale, args.fix_x_y, args.z_aux_lengthscale, args.z_pred_lengthscale, args.eft_lengthscale, args.outputscale, args.gaussian_noise, args.learned_noise, args.model_name, args.patience, args.min_delta, args.COMPUTE_VAR, args.SAVE, args.SAVE_preds, args.max_split_diff, args.max_tries, args.seed, args.composites, args.ood, args.agb
+
+    # Return the parsed arguments as a single namespace (access fields as args.<name>).
+    return args
 
 
 def train_loop(model, likelihood, train_x, train_y, val_x, val_y, run, num_iterations, patience, min_delta, pos_loss, lr, aux, coords, pred_vals, fix_x_y = False):
@@ -410,4 +481,4 @@ def train_with_retries(model, likelihood, train_x, train_y, val_x, val_y, run, n
             raise Exception(f"Training failed with unexpected error: {e}")
     raise RuntimeError("Training failed for all learning rates.")
 
-__all__ = ['get_data', 'get_extra_features', 'load_dense_preds', 'parser', 'train_loop', 'train_with_retries']
+__all__ = ['SplitBundle', 'get_data', 'get_extra_features', 'load_dense_preds', 'parser', 'train_loop', 'train_with_retries']
