@@ -26,3 +26,18 @@ Corrected GeoTIFFs have three bands: (1) AGB, (2) residuals, (3) kriging STD.
 need the full-resolution S2 imagery + DEM, which are too large to bundle). To refresh a bundled
 output after a new run, copy it from `DATA_ROOT/EcosystemAnalysis/Models/Biomes/Sumatra/` back
 into `outputs/` under the same name.
+
+## Original data sources
+
+The files here are redistributed copies provided so the notebook is self-contained. The originals:
+
+- **ESA CCI** biomass map (`CCI_N00E100.tif`) — ESA CCI Biomass product,
+  <https://catalogue.ceda.ac.uk/uuid/6429d1aafe1e43b9b414e4a5a7f8b903/>
+- **Sumatra reference** AGB rasters (`agbd_{100,500,1000}m.tif`) — from Paul B. May (2024),
+  *Remote Sensing of Environment*,
+  <https://www.sciencedirect.com/science/article/pii/S0034425724004103>; the reference prediction
+  rasters were obtained by contacting the author.
+- **GEDI** L4A footprints (`L4A_Sumatra.gpkg`) and L4B 1 km grid (`GEDI_L4B_AGBD_Sumatra.tif`) —
+  NASA GEDI mission products.
+- `merged_downsampled-100m_composite.tif` and the `kriging-*` / `splits-*` files are produced by
+  this repository (BioFiLM inference + the Sumatra kriging pipeline).
