@@ -1,4 +1,12 @@
 TODO_FOR_AUTHOR.md
 data/*
-*/__pycache__/*
-*/*/__pycache__/*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# uv / virtualenvs (uv.lock IS committed; the venv is not)
+.venv/
+venv/

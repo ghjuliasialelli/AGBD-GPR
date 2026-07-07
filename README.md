@@ -40,14 +40,25 @@ DATA.md           manifest of the large inputs you must provide
 
 ## Installation
 
+The project uses [**uv**](https://docs.astral.sh/uv/) for environment management. It installs a
+pinned, reproducible environment (from `uv.lock`) — including PyTorch and the full geospatial
+stack — in one step, with no conda and no system GDAL:
+
 ```bash
-conda env create -f environment.yml
-conda activate biofilm-gpr-agb
-pip install -e .          # makes the `model`, `inference`, `kriging`, ... packages importable
+uv sync --extra notebook        # core deps + Jupyter, into ./.venv
 ```
 
-Python 3.10. The model/inference/kriging code uses PyTorch, PyTorch Lightning and GPyTorch;
-`cloud_mask.py` additionally needs the external cloudSEN12 package (see DATA.md).
+Then either prefix commands with `uv run` (e.g. `uv run python -m model.eval ...`,
+`uv run jupyter lab`), or activate the venv (`source .venv/bin/activate`). `uv sync` also installs
+this repo as an editable package, so `config`, `model`, `inference`, `kriging`, `sumatra`, … import
+directly.
+
+Optional extras: `--extra tracking` (Weights & Biases), `--extra cloudmask` (the IPL-UV cloudSEN12
+model needed only by `data_prep/cloud_mask.py`), `--extra dev` (ipdb).
+
+The env is Python 3.11 with PyTorch, PyTorch Lightning, GPyTorch and rasterio/geopandas/pyogrio.
+On Linux the default `torch` wheel is CUDA-enabled; for a CPU-only machine install it from the CPU
+index (`uv pip install torch --index-url https://download.pytorch.org/whl/cpu`).
 
 ## Quick start: single-tile pipeline
 
@@ -142,9 +153,18 @@ for tile 30NXM runs out of the box. Note:
   `<DATA_ROOT>/patches`, so place them in `data/patches/` if you train.
 - **Other tiles:** the `tiles/alos/dem/lc` paths in `configs/local.yaml` point at `example/`;
   to run on your own tiles, point them at your own S2/ALOS/DEM/LC data.
-- **Sumatra reproduction** (`src/sumatra/`) reads hardcoded `<DATA_ROOT>/Sumatra-AGB/...`,
-  `<DATA_ROOT>/GEDI/Sumatra/...` paths rather than `local.yaml`; place/symlink the `Sumatra/`
-  files there to reproduce those.
+- **Sumatra analysis is self-contained.** `src/sumatra/get_results.ipynb` (Table 3 + Fig 6)
+  reads a small bundled dataset in `src/sumatra/data/`, so it runs from a fresh clone with no
+  external data and no `AGBD_ENV`. Only *re-running* the Sumatra kriging (`src/sumatra/kriging.sh`)
+  needs the full external inputs (our S2/merged prediction, ESA CCI, GEDI L4A, ALOS DEM) under
+  `DATA_ROOT`; see `src/sumatra/README.md`.
+  - **Original data sources.** The files under `src/sumatra/data/` are redistributed copies
+    provided for convenience. The originals come from: the **ESA CCI** biomass product
+    ([CEDA catalogue](https://catalogue.ceda.ac.uk/uuid/6429d1aafe1e43b9b414e4a5a7f8b903/)), and
+    the **Sumatra** reference dataset described in
+    [May (2024), *Remote Sensing of Environment*](https://www.sciencedirect.com/science/article/pii/S0034425724004103)
+    — the reference AGB prediction rasters themselves were obtained by contacting the author,
+    Paul B. May.
 
 > Note: because scripts import the top-level `config` module (and the `model`/`inference`/
 > `kriging` packages), run them after `pip install -e .`, or with `PYTHONPATH=src`.
@@ -188,7 +208,7 @@ Set `AGBD_ENV` (see [Data](#data)) and provide the inputs in `DATA.md`, then:
 | **Table 1** — BioFiLM vs. baseline RMSE | train: `scripts/train/*.sh` → `src/model/train.py`; evaluate: `python -m model.eval ...` |
 | **Figs 3 / F.9–F.10** — dense AGB maps | `src/data_prep/` (composite) → `python -m inference.inference_composite ...` |
 | **Table 2** — kriging configurations | `bash src/kriging/kriging.sh` (→ `kriging.py` → `predict.py`) |
-| **Table 3 + Figure 6** — Sumatra (ours & ESA CCI) | `bash src/sumatra/kriging.sh` → `kriging_*gedi.py`; figure: `compose_figure.py`, `get_results.ipynb` |
+| **Table 3 + Figure 6** — Sumatra (ours & ESA CCI) | open `src/sumatra/get_results.ipynb` (self-contained, reads `src/sumatra/data/`); to regenerate the corrected maps first, `bash src/sumatra/kriging.sh` → `kriging_*gedi.py`; figure panels: `compose_figure.py` |
 | **End-to-end, one tile** | `examples/single_tile_pipeline.ipynb` |
 
 `scripts/train/` covers the BioFiLM ablations (Table 1 and Appendix E.6/E.7); the kriging

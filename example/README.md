@@ -14,7 +14,7 @@ Each step builds the same argument list the CLI scripts use and calls the functi
 from the shell and programmatically).
 
 **Requirements**
-- The conda environment from `environment.yml` (PyTorch, GPyTorch, rasterio, geopandas, …) and a **GPU** for the inference and kriging steps.
+- The project environment (`uv sync` — PyTorch, GPyTorch, rasterio, geopandas, …; see the top-level README) and a **GPU** for the inference and kriging steps.
 - `DATA_ROOT` set (in `src/config.py` or the environment) to data laid out as in `DATA.md`:
   the S2 L2A products for the tile, the ALOS DEM, GEDI L4A footprints, the S2 tile-index
   shapefile, and the BioFiLM ensemble checkpoints.
