@@ -100,9 +100,9 @@ fi
 BASE_PATH_DATA="${DATA_ROOT}"
 BASE_PATH_CODE="${DATA_ROOT}"
 
-path_geometries="${BASE_PATH_CODE}/BiomassDatasetCreation/Data/download_Sentinel/sentinel_2_index_shapefile.shp"
+# Kriging outputs are written via sumatra/paths.py (derived from DATA_ROOT, redirectable with
+# SUMATRA_OUT), so no output directory is passed on the command line anymore.
 path_dem="${BASE_PATH_DATA}/ALOS"
-path_kriging="${BASE_PATH_CODE}/EcosystemAnalysis/Models/Biomes/Sumatra"
 
 if [[ "$pred" == "CCI" ]]; then
     path_predictions="${BASE_PATH_CODE}/EcosystemAnalysis/Models/Biomes/Sumatra/Data/CCI/CCI_N00E100.tif"
@@ -124,8 +124,11 @@ else
     exit 1
 fi
 
-# if composites, add _composite to the model name
-if [[ "$composites" == "true" ]]; then
+# The "_composite" suffix marks that OUR prediction was built from S2 composites. It only
+# applies to pred=ours; external maps (CCI, gdbt) are not composites and keep their plain name.
+# (This is what the notebook expects: sumatra_gedi_composite / sumatra_downsampled_gedi_composite
+#  for ours, but sumatra_cci_gedi for CCI.)
+if [[ "$composites" == "true" && "$pred" == "ours" ]]; then
     model_name="${model_name}_composite"
 fi
 
@@ -144,7 +147,7 @@ if [[ "$reference" == "gedi" ]]; then
         python $ours_script \
         --s2_tile $s2_tile --year $year --arch $arch --ens_models ${ens_models[@]} \
         --test_holdout $test_holdout --val_holdout $val_holdout --stripe_size $stripe_size --path_predictions $path_predictions \
-        --path_gedi $path_gedi --path_geometries $path_geometries --path_dem $path_dem --path_kriging $path_kriging \
+        --path_gedi $path_gedi --path_dem $path_dem \
         --aux $aux --extra_features ${extra_features[@]} --norm_aux $norm_aux --norm_coords $norm_coords \
         --norm_res $norm_res --coords $coords --pred_vals $pred_vals --matern_nu $matern_nu \
         --num_iterations $num_iterations --pos_loss $pos_loss --lr $lr --max_train_footprints $max_train_footprints \
@@ -160,7 +163,7 @@ if [[ "$reference" == "gedi" ]]; then
         python kriging_gedi.py \
         --s2_tile $s2_tile --year $year --arch $arch --ens_models ${ens_models[@]} \
         --test_holdout $test_holdout --val_holdout $val_holdout --stripe_size $stripe_size --path_predictions $path_predictions \
-        --path_gedi $path_gedi --path_geometries $path_geometries --path_dem $path_dem --path_kriging $path_kriging \
+        --path_gedi $path_gedi --path_dem $path_dem \
         --aux $aux --extra_features ${extra_features[@]} --norm_aux $norm_aux --norm_coords $norm_coords \
         --norm_res $norm_res --coords $coords --pred_vals $pred_vals --matern_nu $matern_nu \
         --num_iterations $num_iterations --pos_loss $pos_loss --lr $lr --max_train_footprints $max_train_footprints \
