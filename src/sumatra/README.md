@@ -36,12 +36,15 @@ map (local mean / std / coefficient-of-variation / range, plus Sobel and Laplaci
 |------|------------|
 | **`pipeline.py`** | **The kriging pipeline itself**, in one place: the geographic split (`geographical_train_test_split`, `get_fold`), split assembly (`get_train_val_test_split`), and the top-level `run_kriging_for_map(cfg, path_predictions, model_name, s2_tile, reference)` that every entry script calls. Read this to understand what actually happens. |
 | **`paths.py`** | **Single source of truth for every I/O path.** The `kriging_*.py` scripts write through it and `get_results.ipynb` reads through it, so output and input filenames can never drift apart. Reads prefer the bundled `data/` (below), falling back to the full `DATA_ROOT` tree; writes go to `DATA_ROOT` (or `SUMATRA_OUT`). |
-| **`data/`** | **Self-contained bundle** (~320 MB): exactly the inputs + kriging outputs `get_results.ipynb` needs, so a fresh clone runs the notebook with no external data and no `AGBD_ENV`. See `data/README.md`. |
+| **`data/`** | **Data bundle** (~350 MB, not in git): exactly the inputs + kriging outputs `get_results.ipynb` needs. Download the `Sumatra/` folder of the ETH Research Collection record, then `python src/sumatra/download_data.py --from <folder>` (checked against `data/MANIFEST.json`); then the notebook needs no other external data and no `AGBD_ENV`. See `data/README.md`. |
+| **`download_data.py`** | Puts the files of the downloaded `Sumatra/` folder (or a zip of it) into `data/inputs|outputs` and checks them against `data/MANIFEST.json` (`--from PATH`, `--url URL`, `--check`; `--stage DIR` refreshes the manifest and copies the files flat for upload). Standard library only. |
 | **`kriging_gedi.py`** | Thin entry point for a **single-raster** prediction (e.g. the ESA **CCI** map): parse args → seed → `run_kriging_for_map`. Start here. |
 | **`kriging_downsampled_gedi.py`** | Thin entry point, input = **our downsampled merged** prediction (a 2-band GeoTIFF: AGB + STD). |
 | **`kriging_ours_gedi.py`** | Thin entry point, input = **our full-resolution** prediction; loops over the Sumatra tiles and additionally supports **OOD footprint removal** (`--ood`). |
 | **`common.py`** | Lower-level helpers: `get_data` (returns the `SplitBundle` — see below), extra-feature computation, prediction loading, the CLI `parser` (returns an argparse `Namespace`), and the GP training loop with LR-retries. |
 | **`kriging.sh`** | The launcher. Sets every hyper-parameter, then dispatches to one of the three entry scripts. **This is how the pipeline is meant to be run.** |
+| **`merge_tiles.py`** | Merges the 9 per-tile 10 m rasters (two UTM zones) over the study area with Gaussian-feathered overlaps and averages the mosaic onto the 100 m / 500 m / 1 km reference grids. Port of the legacy `get_dense_basemaps.ipynb`; reproduces the published mosaics exactly, with bands now selected by name (Revision 2). |
+| **`tables.py`** | Reproduces Table 4 / Table G.5: every map on the exact reference grid (`warp_to_reference`: nearest for near-identical grids, bilinear otherwise), RMSE / MAE / ME / r. Used by the last cell of `get_results.ipynb`. |
 | **`compose_figure.py`** | Standalone figure builder: arranges pre-rendered map / residual / density panels into the paper's comparison figures. Not part of the kriging run. |
 | **`get_results.ipynb`** | Post-hoc analysis of kriging outputs: agreement with GEDI L4B, binned residuals, density scatter plots, per-map metrics. Reads the `.tif` / `.pkl` written by the scripts above (all resolved through `paths.py`). |
 | **`Resources/`** | Static inputs: `geometry.geojson`, `sumatra_tiles.txt`, `sumatra_products.txt`. |
@@ -60,7 +63,7 @@ tile/feature assembly) and `src/config.py` (`DATA_ROOT` and all data paths).
 Everything is driven by **`kriging.sh`** — edit the settings block at the top, then:
 
 ```bash
-conda activate krige
+source /path/to/AGBD-GPR/.venv/bin/activate   # uv env (`uv sync`), see the top-level README
 export AGBD_ENV=pf-pc28            # picks configs/<env>.yaml -> sets DATA_ROOT
 export PYTHONPATH=/path/to/AGBD-GPR/src
 cd src/sumatra
@@ -84,9 +87,9 @@ Open **`get_results.ipynb`** and run it top to bottom. It reproduces the paper's
 metric tables — agreement with GEDI L4B, pre/post maps, binned residuals, density scatters, and
 the footprint-level comparison of our downsampled map vs. ESA CCI.
 
-Because the data it needs is bundled under **`data/`** (and resolved via `paths.py`), the notebook
-is **self-contained**: a fresh clone runs it end to end with no external data, no `AGBD_ENV`, from
-any working directory. Running `kriging.sh` is only needed to *regenerate* those outputs.
+The data it needs goes under **`data/`** (resolved via `paths.py`): download the `Sumatra/` folder of the
+ETH Research Collection record and run `python src/sumatra/download_data.py --from <folder>`. After that the notebook runs end to end with no other external
+data, no `AGBD_ENV`, from any working directory. Running `kriging.sh` is only needed to *regenerate* those outputs.
 
 ### The main knobs in `kriging.sh`
 

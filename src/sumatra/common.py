@@ -27,8 +27,10 @@ from linear_operator.utils.errors import NotPSDError
 from linear_operator.utils.warnings import NumericalWarning
 from rasterio.transform import Affine
 from rasterio.enums import Resampling
+from rasterio.warp import reproject
 
 from config import DATA_ROOT
+from sumatra import paths
 from kriging.core import equals, float_or_str, str2bool, zero_first_two  # shared helpers (see src/kriging/core.py)
 
 
@@ -266,26 +268,42 @@ def load_dense_preds(s2_path, model_name, aux = None, bounds = None) :
             window = None
             _transform = src.transform
 
-        # We need to resample even though CCI has a 100m resolution because their pixel grids are not perfectly aligned
-        if "cci" in model_name : 
-            with rs.open(f'{DATA_ROOT}/Sumatra-AGB/pred_rasters/agbd_100m.tif', 'r') as _src:
-                if bounds is not None : 
+        # Get the metadata of the file (to later save the Kriging results)
+        meta = src.meta.copy()
+
+        # CCI (~98.46 m pixels) is not on the reference grid (100 m), so we WARP it onto the exact
+        # reference grid. The returned transform and meta are those of the reference grid, so that
+        # footprint indexing, the dense prediction and the saved raster all share one georeferencing.
+        # (Revision 2 fix: previously the data were resampled to the reference *shape* while the
+        # original 98.46 m transform was kept, mis-locating footprints by up to ~5 km.)
+        if "cci" in model_name :
+            with rs.open(paths.reference_agb(100), 'r') as _src:
+                if bounds is not None :
                     sumatra_window = rs.windows.from_bounds(bounds[0], bounds[1], bounds[2], bounds[3], _src.transform)
                     sumatra_window = sumatra_window.round_offsets().round_lengths()
-                else: sumatra_window = None
-                sumatra_1_shape = _src.read(1, window = sumatra_window).shape
-                print('sumatra_1_shape', sumatra_1_shape)
-            data = src.read(window = window, out_shape = (src.count, sumatra_1_shape[0], sumatra_1_shape[1]), resampling = Resampling.bilinear)
+                    ref_transform = _src.window_transform(sumatra_window)
+                    ref_shape = (int(sumatra_window.height), int(sumatra_window.width))
+                else:
+                    ref_transform, ref_shape = _src.transform, _src.shape
+                ref_crs = _src.crs
+            print('reference grid shape', ref_shape)
+            src_nodata = src.nodata if src.nodata is not None else np.nan
+            data = np.full((src.count, ref_shape[0], ref_shape[1]), np.nan, dtype = np.float32)
+            for b in range(src.count):
+                reproject(source = rs.band(src, b + 1), destination = data[b],
+                          src_transform = src.transform, src_crs = src.crs, src_nodata = src_nodata,
+                          dst_transform = ref_transform, dst_crs = ref_crs, dst_nodata = np.nan,
+                          resampling = Resampling.bilinear)
+            _transform = ref_transform
+            meta.update(transform = ref_transform, crs = ref_crs, height = ref_shape[0], width = ref_shape[1], nodata = np.nan)
         else:
             data = src.read(window = window)
-        
+            if window is not None : meta.update(transform = _transform, height = data.shape[1], width = data.shape[2])
+
         # Get the predictions and the STD
         pred_agb = data[0, :, :]
         print('pred_agb shape', pred_agb.shape)
         pred_std = data[1, :, :] if aux == 'STD' else None
-
-        # Get the metadata of the file (to later save the Kriging results)
-        meta = src.meta
         upsampling_shape = pred_agb.shape
         nodataval = src.nodata
         target_crs = src.crs
@@ -335,6 +353,8 @@ def parser():
     parser.add_argument('--outputscale', type = float, required = True, help = 'Output scale.')
     parser.add_argument('--gaussian_noise', type = float, required = True, help = 'Gaussian noise.')
     parser.add_argument('--learned_noise', type = float, required = True, help = 'Learned noise.')
+    parser.add_argument('--noise_mode', type = str, default = 'fixed', choices = ['fixed', 'learned'],
+                        help = "'fixed': likelihood noise frozen at --gaussian_noise (published behaviour); 'learned': optimised.")
     parser.add_argument('--model_name', type = str, required = True, help = 'Name of the model.')
     parser.add_argument('--patience', type = float, required = True, help = 'Patience for early stopping.')
     parser.add_argument('--min_delta', type = float, required = True, help = 'Minimum change for early stopping.')
@@ -459,8 +479,11 @@ def train_with_retries(model, likelihood, train_x, train_y, val_x, val_y, run, n
     """
     
     learning_rates = [lr, lr/10, lr/100, lr/1000] # List of learning rates to try
+    # Revision 2 (F5): the likelihood must be the model's OWN submodule. Previously model and likelihood were
+    # deep-copied separately, so the MLL used a likelihood whose noise was not among the optimised
+    # parameters and the noise silently stayed at its initial value. Each retry now also starts from a
+    # fresh copy instead of continuing from the failed attempt's partially trained state.
     og_model = deepcopy(model)
-    og_likelihood = deepcopy(likelihood)
 
     print('Checking trainable parameters:')
     for name, param in model.named_parameters():
@@ -471,7 +494,8 @@ def train_with_retries(model, likelihood, train_x, train_y, val_x, val_y, run, n
         try:
             with warnings.catch_warnings() :
                 warnings.filterwarnings("error", category=NumericalWarning) # treat the NumericalWarning as an error
-                model, best_model_state, optimizer, mll = train_loop(og_model, og_likelihood, train_x, train_y, val_x, val_y, run, num_iterations, patience, min_delta, pos_loss, _lr, aux, coords, pred_vals, fix_x_y)
+                attempt = deepcopy(og_model)
+                model, best_model_state, optimizer, mll = train_loop(attempt, attempt.likelihood, train_x, train_y, val_x, val_y, run, num_iterations, patience, min_delta, pos_loss, _lr, aux, coords, pred_vals, fix_x_y)
             return model, best_model_state, optimizer, mll
         except NotPSDError as e:
             print(f"Training failed at lr={_lr} with NotPSDError: {e}")

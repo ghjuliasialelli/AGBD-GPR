@@ -53,12 +53,15 @@ Then either prefix commands with `uv run` (e.g. `uv run python -m model.eval ...
 this repo as an editable package, so `config`, `model`, `inference`, `kriging`, `sumatra`, … import
 directly.
 
-Optional extras: `--extra tracking` (Weights & Biases), `--extra cloudmask` (the IPL-UV cloudSEN12
+Optional extras: `--extra cloudmask` (the IPL-UV cloudSEN12
 model needed only by `data_prep/cloud_mask.py`), `--extra dev` (ipdb).
 
-The env is Python 3.11 with PyTorch, PyTorch Lightning, GPyTorch and rasterio/geopandas/pyogrio.
-On Linux the default `torch` wheel is CUDA-enabled; for a CPU-only machine install it from the CPU
-index (`uv pip install torch --index-url https://download.pytorch.org/whl/cpu`).
+The env is Python 3.12 with PyTorch 2.6 (CUDA 12.4 wheels), PyTorch Lightning, GPyTorch 1.14,
+rasterio/geopandas/pyogrio and Weights & Biases (logging stays off unless `USE_WANDB=true`). The packages
+that determine the kriging numerics are pinned to the versions used for the paper's runs.
+
+**On a SLURM cluster**, pack the env once per `uv sync` with `bash scripts/env/pack_env.sh`; jobs unpack it
+to node-local disk (`scripts/env/activate_env.sh`, used by `src/kriging/kriging.sh`).
 
 ## Quick start: single-tile pipeline
 
@@ -129,11 +132,14 @@ data/
 ├── kriging/                       # kriging inputs
 │   ├── L4A_*-indexed.gpkg         #   GEDI L4A footprints (pass as --path_gedi)
 │   └── valid_2020.txt             #   (also shipped in src/kriging/txt_files/)
-└── Sumatra/                       # Sumatra use case (§4.3)
+└── Sumatra/                       # Sumatra use case (§4.3); all files read by src/sumatra/get_results.ipynb
     ├── agbd_{100,500,1000}m.tif   #   field/ALS reference maps
     ├── L4A_Sumatra.gpkg           #   GEDI L4A (Sumatra AOI)
     ├── GEDI_L4B_AGBD_Sumatra.tif  #   GEDI L4B reference
-    └── CCI_N00E100*.tif           #   ESA CCI biomass (CCI experiment)
+    ├── CCI_N00E100.tif            #   ESA CCI biomass, 2021-2022 (CCI experiment)
+    ├── merged_downsampled-*.tif   #   our map before and after kriging, at 100 m / 500 m / 1 km
+    ├── kriging-*.tif              #   CCI and our 100 m map after kriging
+    └── splits-*.pkl, split_map-*.pkl  # train/val/test splits of those runs
 ```
 
 `predictions/` and `kriging/` outputs are created by the pipeline; you don't download them.
@@ -154,8 +160,9 @@ for tile 30NXM runs out of the box. Note:
 - **Other tiles:** the `tiles/alos/dem/lc` paths in `configs/local.yaml` point at `example/`;
   to run on your own tiles, point them at your own S2/ALOS/DEM/LC data.
 - **Sumatra analysis is self-contained.** `src/sumatra/get_results.ipynb` (Table 3 + Fig 6)
-  reads a small bundled dataset in `src/sumatra/data/`, so it runs from a fresh clone with no
-  external data and no `AGBD_ENV`. Only *re-running* the Sumatra kriging (`src/sumatra/kriging.sh`)
+  reads a small dataset in `src/sumatra/data/`: download only the `Sumatra/` folder of the bundle and
+  run `python src/sumatra/download_data.py --from <folder>`, which sorts the files into place and checks
+  them. The notebook then runs with no other external data and no `AGBD_ENV`. Only *re-running* the Sumatra kriging (`src/sumatra/kriging.sh`)
   needs the full external inputs (our S2/merged prediction, ESA CCI, GEDI L4A, ALOS DEM) under
   `DATA_ROOT`; see `src/sumatra/README.md`.
   - **Original data sources.** The files under `src/sumatra/data/` are redistributed copies
@@ -208,10 +215,9 @@ Set `AGBD_ENV` (see [Data](#data)) and provide the inputs in `DATA.md`, then:
 | **Table 1** — BioFiLM vs. baseline RMSE | train: `scripts/train/*.sh` → `src/model/train.py`; evaluate: `python -m model.eval ...` |
 | **Figs 3 / F.9–F.10** — dense AGB maps | `src/data_prep/` (composite) → `python -m inference.inference_composite ...` |
 | **Table 2** — kriging configurations | `bash src/kriging/kriging.sh` (→ `kriging.py` → `predict.py`) |
-| **Table 3 + Figure 6** — Sumatra (ours & ESA CCI) | open `src/sumatra/get_results.ipynb` (self-contained, reads `src/sumatra/data/`); to regenerate the corrected maps first, `bash src/sumatra/kriging.sh` → `kriging_*gedi.py`; figure panels: `compose_figure.py` |
+| **Table 3 + Figure 6** — Sumatra (ours & ESA CCI) | download `Sumatra/`, `python src/sumatra/download_data.py --from <folder>`, then open `src/sumatra/get_results.ipynb` (reads `src/sumatra/data/`); to regenerate the corrected maps first, `bash src/sumatra/kriging.sh` → `kriging_*gedi.py`; figure panels: `compose_figure.py` |
 | **End-to-end, one tile** | `examples/single_tile_pipeline.ipynb` |
 
 `scripts/train/` covers the BioFiLM ablations (Table 1 and Appendix E.6/E.7); the kriging
-hyper-parameters of Table 2's recommended configuration (config VII) are the defaults in
-`src/kriging/kriging.sh`. For an exact software environment, generate a lockfile from your
-install (`conda env export --no-builds > environment.lock.yml`).
+hyper-parameters of Table 2's recommended configuration (config IX) are the defaults in
+`src/kriging/kriging.sh`. The exact software environment is pinned in `uv.lock`.

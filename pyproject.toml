@@ -5,42 +5,48 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "biofilm-gpr-agb"
 version = "0.1.0"
-description = "BioFiLM + Gaussian Process Regression for bias correction of satellite-based AGB estimates"
-requires-python = ">=3.10,<3.12"
+description = "BioFiLM + Gaussian Process Regression for the calibration of satellite-based AGB maps"
+# 3.12 = the Python of the conda `krige` env that produced the published kriging results.
+requires-python = ">=3.12,<3.13"
 
 # Core dependencies for the full pipeline (model training, inference, kriging, Sumatra use case).
 # The geospatial stack (rasterio/geopandas/pyogrio/shapely/pyproj) installs from manylinux wheels
 # that bundle their own GDAL/GEOS/PROJ — no system GDAL is required.
+#
+# Revision 2 (2026-11): the packages that determine the GP numerics are pinned to the versions of the
+# conda `krige` env used for the published kriging runs (torch 2.6.0+cu124, gpytorch 1.14,
+# linear_operator 0.6, numpy 2.2), so that results are reproducible across the two environments.
+# numpy >= 2 is REQUIRED: the kriging code uses `np.pow` (numpy-2-only); the previous `numpy<2` pin made
+# the kriging pipeline unrunnable in this env.
 dependencies = [
-    "numpy>=1.24,<2",       # <2: the model code is tested on the numpy 1.x line
-    "scipy>=1.10",
-    "pandas>=1.5",
-    "matplotlib>=3.7",
-    "scikit-learn>=1.1",
-    "scikit-image>=0.21",
+    "numpy>=2.2,<2.3",
+    "scipy>=1.15,<1.16",
+    "pandas>=2.2,<2.3",
+    "matplotlib>=3.10",
+    "scikit-learn>=1.6,<1.7",
+    "scikit-image>=0.25,<0.26",
     "h5py>=3.8",
     "tqdm>=4.65",
     "psutil>=5.9",
     "pyyaml>=6.0",
-    "rasterio>=1.3",
-    "geopandas>=0.14",      # >=0.14 for the pyogrio read engine used across the repo
-    "pyogrio>=0.7",
-    "shapely>=2.0",
-    "pyproj>=3.5",
-    "torch>=2.2",
-    "torchvision>=0.17",
+    "rasterio>=1.4.3,<1.5",
+    "geopandas>=1.0.1,<1.1",
+    "pyogrio>=0.10,<0.11",
+    "shapely>=2.0.7,<2.1",
+    "pyproj>=3.7,<3.8",
+    "torch==2.6.0",
+    "torchvision==0.21.0",
     "pytorch-lightning>=2.0",
     "torchmetrics>=1.0",
-    "gpytorch>=1.11",
-    "linear-operator>=0.5",
+    "gpytorch==1.14",
+    "linear-operator==0.6",
     "datasets>=2.10",
+    "wandb>=0.19,<0.20",    # optional at runtime (USE_WANDB); installed so cluster runs can log
 ]
 
 [project.optional-dependencies]
-# Experiment tracking (off by default; enable with USE_WANDB=true).
-tracking = ["wandb>=0.15"]
 # Running the notebooks (e.g. src/sumatra/get_results.ipynb, examples/).
-notebook = ["ipykernel>=6", "jupyter>=1.0"]
+notebook = ["ipykernel>=6", "jupyter>=1.0", "nbconvert>=7"]
 # Sentinel-2 cloud masking (src/data_prep/cloud_mask.py) — pulls the IPL-UV cloudSEN12 model.
 cloudmask = [
     "georeader-spaceml",
@@ -55,7 +61,18 @@ py-modules = ["config", "wandb_utils"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# torch / torchvision come from the CUDA 12.4 wheel index (same build as the `krige` env, which has run on
+# the cluster); everything else from PyPI.
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
 # --- uv notes -------------------------------------------------------------------------------
-# Install with:   uv sync --extra notebook        (add --extra tracking / cloudmask as needed)
-# On Linux the default `torch` wheel is CUDA-enabled. For a CPU-only machine, install torch from
-# the CPU index, e.g.:  uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+# Install with:   uv sync --extra notebook        (add --extra cloudmask as needed)
+# Cluster jobs:   scripts/env/pack_env.sh packs .venv + its Python into one tar that jobs unpack to
+#                 node-local disk (see src/kriging/kriging.sh).

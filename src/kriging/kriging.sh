@@ -2,12 +2,13 @@
 #SBATCH --time=4:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
-#SBATCH --output=${DATA_ROOT}/logs/kriging-%A_%a.out
-#SBATCH --error=${DATA_ROOT}/logs/kriging-%A_%a.out
+#SBATCH --output=/cluster/scratch/gsialelli/logs/kriging-%A_%a.out
+#SBATCH --error=/cluster/scratch/gsialelli/logs/kriging-%A_%a.out
 #SBATCH --mem-per-cpu=9G
 #SBATCH --array=1,107,120,,565
 #SBATCH --gpus=1
 #SBATCH --gres=gpumem:15g
+#SBATCH --tmp=20G   # node-local disk for the unpacked uv env (~6.6 GB)
 
 
 ##################################################################################################################
@@ -55,11 +56,13 @@ gaussian_noise=10.0
 learned_noise=10.0
 
 matern_nu=0.5 # 0.5, 1.5, 2.5
+noise_mode="${NOISE_MODE:-fixed}" # fixed = noise frozen at gaussian_noise (published) | learned  [Revision 2, F5]
+gaussian_noise_override="${GAUSSIAN_NOISE:-}" # optional override of the normalised noise value (init if learned)
 
 
 COMPUTE_VAR="true"
 SAVE="true" # save the metrics .pkl files
-SAVE_preds="false" # save the prediction .tif files
+SAVE_preds="${SAVE_PREDS:-false}" # save the prediction .tif files # env SAVE_PREDS overrides (Revision 2)
 
 offline="true" # run wandb in offline mode (no network sync) to avoid hangs without internet
 
@@ -82,6 +85,7 @@ fi
 if [[ "$norm_res" == "true" ]]; then
     outputscale=1.0
     gaussian_noise=0.1
+    if [[ -n "$gaussian_noise_override" ]]; then gaussian_noise=$gaussian_noise_override; fi
     patience=50
     min_delta=0.001
 else
@@ -93,7 +97,7 @@ fi
 
 
 # Tiles to run the inference on
-LIST_TILES_FILE="EcosystemAnalysis/Models/Biomes/inference/per_tile/valid_${year}.txt"
+LIST_TILES_FILE="${LIST_TILES_FILE:-EcosystemAnalysis/Models/Biomes/inference/per_tile/valid_${year}.txt}" # env override (Revision 2)
 echo "Will read products from file ${LIST_TILES_FILE}"
 
 ##################################################################################################################
@@ -106,8 +110,21 @@ first_part=$(echo "$current_directory" | cut -d'/' -f2)
 
 if [[ "$first_part" == "cluster" ]]; then
     echo "Running on a cluster"
-    source ${DATA_ROOT}/mambaforge/etc/profile.d/conda.sh
-    conda activate krige
+    # Environment (Revision 2): the project's uv env, packed by scripts/env/pack_env.sh and unpacked to node-local
+    # disk; KRIGE_ENV=conda falls back to the legacy conda `krige` env. The job starts in src/kriging/.
+    REPO_ROOT=$(cd "${SLURM_SUBMIT_DIR:-$PWD}/../.." && pwd)
+    export AGBD_ENV=${AGBD_ENV:-euler}
+    # DATA_ROOT: from the environment if set, else from configs/euler.yaml (single source of truth; the legacy
+    # script hard-coded the same /cluster/work/igp_psr/gsialelli).
+    export DATA_ROOT=${DATA_ROOT:-$(awk '/^data_root:/{print $2}' "$REPO_ROOT/configs/euler.yaml")}
+    [[ -d "$DATA_ROOT" ]] || { echo "ERROR: DATA_ROOT '$DATA_ROOT' does not exist"; exit 1; }
+    echo "DATA_ROOT=$DATA_ROOT"
+    if [[ "${KRIGE_ENV:-uv}" == "uv" ]]; then
+        source "$REPO_ROOT/scripts/env/activate_env.sh" "$REPO_ROOT" || exit 1
+    else
+        source ${DATA_ROOT}/mambaforge/etc/profile.d/conda.sh
+        conda activate krige
+    fi
     BASE_PATH_DATA="${DATA_ROOT}/Data"
     BASE_PATH_CODE="${DATA_ROOT}"
     model_name=${SLURM_ARRAY_JOB_ID}-${SLURM_ARRAY_TASK_ID}
@@ -134,7 +151,7 @@ path_predictions="${BASE_PATH_CODE}/EcosystemAnalysis/Models/Biomes/predictions/
 path_gedi="${BASE_PATH_DATA}/GEDI/L4A_California_Cuba_Paraguay_UnitedRepublicofTanzania_Ghana_Austria_Greece_Nepal_ShaanxiProvince_NewZealand_FrenchGuiana-indexed.gpkg"
 path_geometries="${BASE_PATH_CODE}/BiomassDatasetCreation/Data/download_Sentinel/sentinel_2_index_shapefile.shp"
 path_dem="${BASE_PATH_DATA}/ALOS"
-path_kriging="${BASE_PATH_CODE}/EcosystemAnalysis/Models/Biomes/kriging"
+path_kriging="${PATH_KRIGING:-${BASE_PATH_CODE}/EcosystemAnalysis/Models/Biomes/kriging}" # env PATH_KRIGING: write outputs elsewhere (Revision 2)
 LIST_PRODS_FILE="${BASE_PATH_CODE}/${LIST_TILES_FILE}"
 
 ################################################################################################################################
@@ -210,7 +227,9 @@ fi
 ##################################################################################################################
 # Launch the correction
 
-python kriging.py \
+# Run as a module from src/ (Revision 2): `python kriging.py` from src/kriging/ made the script shadow the
+# `kriging` package, so `from kriging.core import ...` failed. Jobs start in the submission dir (src/kriging/).
+cd .. && python -m kriging.kriging \
     --s2_tile $s2_tile --year $year --arch $arch --ens_models ${ens_models[@]} \
     --test_holdout $test_holdout --val_holdout $val_holdout --stripe_size $stripe_size --path_predictions $path_predictions \
     --path_gedi $path_gedi --path_geometries $path_geometries --path_dem $path_dem --path_kriging $path_kriging \
@@ -222,5 +241,4 @@ python kriging.py \
     --outputscale $outputscale --gaussian_noise $gaussian_noise --learned_noise $learned_noise --model_name $model_name \
     --patience $patience --min_delta $min_delta --COMPUTE_VAR $COMPUTE_VAR --SAVE $SAVE \
     --SAVE_preds $SAVE_preds --max_split_diff $max_split_diff --max_tries $max_tries --seed $seed \
-    --composites $composites --ood $ood --agb $agb --offline $offline
-                        --offline $offline
+    --composites $composites --ood $ood --agb $agb --offline $offline --noise_mode $noise_mode

@@ -148,7 +148,7 @@ fi
 
 export WANDB_SERVICE_PORT=0
 
-python predict.py --kriging_model ${kriging_model} \
+cd .. && python -m kriging.predict --kriging_model ${kriging_model} \
     --tile_id ${tile_id} \
     --s2_tile ${s2_tile} \
     --year ${year} \

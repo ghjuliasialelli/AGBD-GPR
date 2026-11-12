@@ -572,8 +572,11 @@ def train_with_retries(model, likelihood, train_x, train_y, val_x, val_y, run, n
     """
     
     learning_rates = [lr, lr/10, lr/100, lr/1000] # List of learning rates to try
+    # Revision 2 (F5): the likelihood must be the model's OWN submodule. Previously model and likelihood were
+    # deep-copied separately, so the MLL used a likelihood whose noise was not among the optimised
+    # parameters and the noise silently stayed at its initial value. Each retry now also starts from a
+    # fresh copy instead of continuing from the failed attempt's partially trained state.
     og_model = deepcopy(model)
-    og_likelihood = deepcopy(likelihood)
 
     print('Checking trainable parameters:')
     for name, param in model.named_parameters():
@@ -584,7 +587,8 @@ def train_with_retries(model, likelihood, train_x, train_y, val_x, val_y, run, n
         try:
             with warnings.catch_warnings() :
                 warnings.filterwarnings("error", category=NumericalWarning) # treat the NumericalWarning as an error
-                model, best_model_state, optimizer, mll = train_loop(og_model, og_likelihood, train_x, train_y, val_x, val_y, run, num_iterations, patience, min_delta, pos_loss, _lr, aux, coords, pred_vals, fix_x_y)
+                attempt = deepcopy(og_model)
+                model, best_model_state, optimizer, mll = train_loop(attempt, attempt.likelihood, train_x, train_y, val_x, val_y, run, num_iterations, patience, min_delta, pos_loss, _lr, aux, coords, pred_vals, fix_x_y)
             if _lr != lr : run.config.update({'lr': _lr}, allow_val_change=True) # Log the new learning rate used
             return model, best_model_state, optimizer, mll
         except TrainingFailure as e:
@@ -754,6 +758,8 @@ def parser(argv=None):
     parser.add_argument('--outputscale', type = float, required = True, help = 'Output scale.')
     parser.add_argument('--gaussian_noise', type = float, required = True, help = 'Gaussian noise.')
     parser.add_argument('--learned_noise', type = float, required = True, help = 'Learned noise.')
+    parser.add_argument('--noise_mode', type = str, default = 'fixed', choices = ['fixed', 'learned'],
+                        help = "'fixed': likelihood noise frozen at --gaussian_noise (published behaviour); 'learned': optimised.")
     parser.add_argument('--model_name', type = str, required = True, help = 'Name of the model.')
     parser.add_argument('--patience', type = float, required = True, help = 'Patience for early stopping.')
     parser.add_argument('--min_delta', type = float, required = True, help = 'Minimum change for early stopping.')
@@ -778,7 +784,7 @@ def parser(argv=None):
     elif args.norm_aux == 'min_max' : args.norm_aux = 'min_max'
     else: raise ValueError(f"norm_aux must be either 'false' or 'min_max', got {args.norm_aux}.")
     
-    return args.s2_tile, args.year, args.arch, args.ens_models, args.test_holdout, args.val_holdout, args.stripe_size, args.path_predictions, args.path_gedi, args.path_geometries, args.path_dem, args.path_kriging, args.aux, args.extra_features, args.norm_aux, args.norm_coords, args.norm_res, args.coords, args.pred_vals, args.matern_nu, args.num_iterations, args.pos_loss, args.lr, args.max_train_footprints, args.mem_max_footprints, args.x_lengthscale, args.y_lengthscale, args.fix_x_y, args.z_aux_lengthscale, args.z_pred_lengthscale, args.eft_lengthscale, args.outputscale, args.gaussian_noise, args.learned_noise, args.model_name, args.patience, args.min_delta, args.COMPUTE_VAR, args.SAVE, args.SAVE_preds, args.max_split_diff, args.max_tries, args.seed, args.composites, args.ood, args.agb, args.ref_model
+    return args.s2_tile, args.year, args.arch, args.ens_models, args.test_holdout, args.val_holdout, args.stripe_size, args.path_predictions, args.path_gedi, args.path_geometries, args.path_dem, args.path_kriging, args.aux, args.extra_features, args.norm_aux, args.norm_coords, args.norm_res, args.coords, args.pred_vals, args.matern_nu, args.num_iterations, args.pos_loss, args.lr, args.max_train_footprints, args.mem_max_footprints, args.x_lengthscale, args.y_lengthscale, args.fix_x_y, args.z_aux_lengthscale, args.z_pred_lengthscale, args.eft_lengthscale, args.outputscale, args.gaussian_noise, args.learned_noise, args.model_name, args.patience, args.min_delta, args.COMPUTE_VAR, args.SAVE, args.SAVE_preds, args.max_split_diff, args.max_tries, args.seed, args.composites, args.ood, args.agb, args.ref_model, args.noise_mode
 
 
 #######################################################################################################################
@@ -792,7 +798,7 @@ def main(argv=None):
     program_start = time()
 
     # Parse the arguments
-    s2_tile, year, arch, ens_models, test_holdout, val_holdout, stripe_size, path_predictions, path_gedi, path_geometries, path_dem, path_kriging, aux, extra_features, norm_aux, norm_coords, norm_res, coords, pred_vals, matern_nu, num_iterations, pos_loss, lr, max_train_footprints, mem_max_footprints, x_lengthscale, y_lengthscale, fix_x_y, z_aux_lengthscale, z_pred_lengthscale, eft_lengthscale, outputscale, gaussian_noise, learned_noise, model_name, patience, min_delta, COMPUTE_VAR, SAVE, SAVE_preds, max_split_diff, max_tries, _seed, composites, ood, agb, ref_model = parser(argv)
+    s2_tile, year, arch, ens_models, test_holdout, val_holdout, stripe_size, path_predictions, path_gedi, path_geometries, path_dem, path_kriging, aux, extra_features, norm_aux, norm_coords, norm_res, coords, pred_vals, matern_nu, num_iterations, pos_loss, lr, max_train_footprints, mem_max_footprints, x_lengthscale, y_lengthscale, fix_x_y, z_aux_lengthscale, z_pred_lengthscale, eft_lengthscale, outputscale, gaussian_noise, learned_noise, model_name, patience, min_delta, COMPUTE_VAR, SAVE, SAVE_preds, max_split_diff, max_tries, _seed, composites, ood, agb, ref_model, noise_mode = parser(argv)
     pred_model_name='_'.join(ens_models)
 
     # Set up Weights & Biases logger
@@ -818,10 +824,22 @@ def main(argv=None):
     random.seed(_seed), np.random.seed(_seed), torch.manual_seed(_seed), torch.cuda.manual_seed_all(_seed)
 
     # Define paths
-    if composites : s2_path = join(path_predictions, f'{s2_tile}_{year}_composite.tif')
+    # Revision 2: resolve the input raster in the legacy nested layout used by the published runs
+    # (<path_predictions>/<arch>/<ens>/<tile>_<year>_composite.tif and .../<arch>/<tile>/<year>/<ens>/AGB_merged.tif)
+    # first, then the flat layout introduced by the refactor; fail loudly if neither exists.
+    def _resolve(*candidates):
+        for c in candidates:
+            if isfile(c): return c
+        raise FileNotFoundError('input raster not found; tried:\n  ' + '\n  '.join(candidates))
+    ens = '_'.join(ens_models)
+    composite_path = _resolve(join(path_predictions, arch, ens, f'{s2_tile}_{year}_composite.tif'),
+                              join(path_predictions, f'{s2_tile}_{year}_composite.tif'))
+    if composites : s2_path = composite_path
     else :
-        s2_path = join(path_predictions, f'{s2_tile}_{year}_AGB_merged.tif')
-        s2_path_ref = join(path_predictions, f'{s2_tile}_{year}_composite.tif')
+        s2_path = _resolve(join(path_predictions, arch, s2_tile, str(year), ens, 'AGB_merged.tif'),
+                           join(path_predictions, f'{s2_tile}_{year}_AGB_merged.tif'))
+        s2_path_ref = composite_path
+    print(f'Input raster: {s2_path}')
     ckpt_path = path_kriging
     if not isdir(ckpt_path) : makedirs(ckpt_path, exist_ok=True)
 
@@ -924,7 +942,7 @@ def main(argv=None):
 
     # Get the train/val/test sets #################################################################
     
-    save_dir = path_kriging
+    save_dir = join(path_kriging, 'predictions', 'splits')  # legacy location of the published splits (Revision 2)
     if not isdir(save_dir) : makedirs(save_dir, exist_ok=True)
     _id = model_name.split('-')[-1]
 
@@ -1164,6 +1182,7 @@ def main(argv=None):
 
     model = ExactGPModel(train_x, train_y, likelihood, ndims = train_x.shape[1], matern_nu = matern_nu)
     model.likelihood.noise = gaussian_noise
+    if noise_mode == 'fixed' : model.likelihood.noise_covar.raw_noise.requires_grad_(False)  # explicit (see F5)
     ###########################################################################################
 
     # Initialize its parameters
@@ -1198,6 +1217,9 @@ def main(argv=None):
     if best_model_state:
         model.load_state_dict(best_model_state)
         if SAVE_preds: torch.save(model.state_dict(), join(ckpt_path, f'{model_name}_{s2_tile}.ckpt'))
+    likelihood = model.likelihood  # the trained likelihood lives inside the (copied) model
+    final_noise = float(likelihood.noise.item())  # normalised units; fixed or learned (Revision 2, F5)
+    print(f'    Final likelihood noise ({noise_mode}): {final_noise:.4f}')
     model.eval()
     likelihood.eval()
 
@@ -1270,6 +1292,26 @@ def main(argv=None):
         # Save the pre-kriging predictions and GTs at the footprints' locations
         with open(join(tif_path, f"results-{model_name}.pkl"), 'wb') as f:
             pickle.dump({'pre': pred_agb[og_Y, og_X], 'ref': og_gedi_agb, 'idx': og_indices, 'post': corrected[og_Y, og_X]}, f)
+        # Revision 2: per-footprint (per-pixel) table with split labels and both uncertainty layers, for the
+        # calibration (A3), conditional-bias (A4) and noise-sensitivity (C) analyses. Pixels, not footprint ids.
+        parts = [('test', Y_test, X_test, gedi_agb_test)]
+        if og_Y_train is not None:
+            parts += [('train', og_Y_train, og_X_train, gedi_agb), ('val', og_Y_val, og_X_val, gedi_agb_val)]
+        fp_rows = np.concatenate([np.asarray(p[1], dtype=int) for p in parts])
+        fp_cols = np.concatenate([np.asarray(p[2], dtype=int) for p in parts])
+        fp_table = {
+            'split': np.concatenate([np.full(len(p[1]), p[0]) for p in parts]),
+            'row': fp_rows, 'col': fp_cols,
+            'gedi': np.concatenate([np.asarray(p[3], dtype=float) for p in parts]),
+            'pre': pred_agb[fp_rows, fp_cols], 'post': corrected[fp_rows, fp_cols],
+            'std_gpr': np.sqrt(residuals_var[fp_rows, fp_cols]) if COMPUTE_VAR else None,
+            'std_ens': pred_std[fp_rows, fp_cols] if pred_std is not None else None,
+            'meta': {'s2_tile': s2_tile, 'model_name': model_name, 'noise_mode': noise_mode, 'final_noise': final_noise,
+                     'res_mu': float(res_mu) if norm_res else None, 'res_std': float(res_std) if norm_res else None,
+                     'x_lengthscale': x_lengthscale, 'y_lengthscale': y_lengthscale},
+        }
+        with open(join(tif_path, f"footprints-{model_name}.pkl"), 'wb') as f:
+            pickle.dump(fp_table, f)
     del(pred_std)
     if not agb: del(pred_agb)
 

@@ -6,9 +6,10 @@ READS them back through the same helpers. Because both sides call the same funct
 output filenames and the notebook's input filenames can never drift apart.
 
 Two data locations, resolved automatically:
-  * `data/` next to this file — a small (~320 MB) self-contained BUNDLE with exactly the inputs
-    and outputs `get_results.ipynb` needs, so a fresh clone can run the notebook with no
-    external data and no `AGBD_ENV`. Reads prefer this bundle when the file is present.
+  * `data/` next to this file — a small (~350 MB) BUNDLE with exactly the inputs and outputs
+    `get_results.ipynb` needs (not in git: fetch it with `python src/sumatra/download_data.py`),
+    so the notebook runs with no other external data and no `AGBD_ENV`. Reads prefer this
+    bundle when the file is present.
   * the full data tree under `config.DATA_ROOT` (processing machine, `AGBD_ENV` set) — used for
     all WRITES (a real kriging run) and as the read fallback when a file isn't in the bundle.
 Set `SUMATRA_OUT` to redirect writes elsewhere (dry runs).
@@ -75,6 +76,16 @@ def merged_input(ens_models):
     """Our downsampled 100 m merged prediction (the raster we krige for the 'ours' result)."""
     return _read(join(BUNDLE_IN, "merged_downsampled-100m_composite.tif"),
                  join(DATA_DIR, "merged", "_".join(ens_models), "merged_downsampled-100m_composite.tif"))
+
+
+def merged_map(ens_models, resolution=100, suffix="_composite"):
+    """Our per-tile 10 m maps merged over the study area and averaged to `resolution` (merge_tiles.py).
+    suffix '_composite'        -> pre-kriging BioFiLM map (bands AGB, STD)          [bundle: inputs/]
+    suffix '_50_2500_dynamic'  -> per-tile 10 m kriging, 2,500 fp/tile, dynamic lengthscale = Table 4's
+                                  "kriging at 10 m" row (bands AGB, STD, Residuals)   [bundle: outputs/]"""
+    fname = f"merged_downsampled-{resolution}m{suffix}.tif"
+    bundle_dir = BUNDLE_IN if suffix == "_composite" else BUNDLE_OUT
+    return _read(join(bundle_dir, fname), join(DATA_DIR, "merged", "_".join(ens_models), fname))
 
 
 def cci_input():

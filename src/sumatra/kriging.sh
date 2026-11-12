@@ -4,8 +4,8 @@
 # Main settings
 
 reference="gedi" # gedi (Mozambique field-reference path removed)
-pred="ours" # ours or CCI
-downsampled="true" # when pred=ours: use our downsampled merged prediction (.tif) instead of the full-res S2 directory
+pred="${PRED:-ours}" # ours or CCI (env PRED overrides)
+downsampled="${DOWNSAMPLED:-true}" # when pred=ours: use our downsampled merged prediction (.tif) instead of the full-res S2 directory
 stripe_size=50
 
 s2_tile="N/A"
@@ -34,7 +34,7 @@ fi
 # Training parameters
 test_holdout=0.3
 val_holdout=0.2
-max_train_footprints=25000 # 10000 25000
+max_train_footprints="${MAX_TRAIN_FOOTPRINTS:-25000}" # 10000 25000 (env overrides)
 max_split_diff=15
 max_tries=100
 ood="false"
@@ -60,6 +60,8 @@ gaussian_noise=10.0
 learned_noise=10.0
 
 matern_nu=0.5 # 0.5, 1.5, 2.5
+noise_mode="${NOISE_MODE:-fixed}" # fixed = noise frozen at gaussian_noise (published) | learned  [Revision 2, F5]
+gaussian_noise_override="${GAUSSIAN_NOISE:-}" # optional override of the normalised noise value (init if learned)
 
 
 COMPUTE_VAR="true"
@@ -85,6 +87,7 @@ fi
 if [[ "$norm_res" == "true" ]]; then
     outputscale=1.0
     gaussian_noise=0.1
+    if [[ -n "$gaussian_noise_override" ]]; then gaussian_noise=$gaussian_noise_override; fi
     patience=50
     min_delta=0.001
 else
@@ -156,7 +159,7 @@ if [[ "$reference" == "gedi" ]]; then
         --learned_noise $learned_noise --model_name $model_name --patience $patience --min_delta $min_delta \
         --COMPUTE_VAR $COMPUTE_VAR --SAVE $SAVE --SAVE_preds $SAVE_preds --max_split_diff $max_split_diff \
         --max_tries $max_tries --seed $seed --composites $composites --ood $ood \
-        --agb $agb
+        --agb $agb --noise_mode $noise_mode
 
     else
 
@@ -172,7 +175,7 @@ if [[ "$reference" == "gedi" ]]; then
         --learned_noise $learned_noise --model_name $model_name --patience $patience --min_delta $min_delta \
         --COMPUTE_VAR $COMPUTE_VAR --SAVE $SAVE --SAVE_preds $SAVE_preds --max_split_diff $max_split_diff \
         --max_tries $max_tries --seed $seed --composites $composites --ood $ood \
-        --agb $agb
+        --agb $agb --noise_mode $noise_mode
     
     fi
 

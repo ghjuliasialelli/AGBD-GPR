@@ -122,7 +122,7 @@ echo "with method: " ${method}
 ##################################################################################################################
 # Launch the correction
 
-python post_merge.py --ESA ${path_esa} --GEDI ${path_gedi} --S2 ${path_geometries} \
+cd .. && python -m kriging.post_merge --ESA ${path_esa} --GEDI ${path_gedi} --S2 ${path_geometries} \
     --predictions ${path_predictions} --inf_model ${inf_model} --krig_model ${krig_model} \
     --tile_name ${esa_tile} --arch ${arch} --buffer_size ${buffer_size} --year ${year} \
     --crs ${crs} --border_crop ${border_crop} --method ${method} --compute_metrics ${compute_metrics} \

@@ -1,0 +1,77 @@
+{
+ "note": "Files read by get_results.ipynb, relative to src/sumatra/data/. On the ETH Research Collection they sit flat in Sumatra/. Written by download_data.py --stage; do not edit by hand.",
+ "files": {
+  "inputs/CCI_N00E100.tif": {
+   "bytes": 57467624,
+   "md5": "80e01cd61fc517b058d9ad4352d0ec99"
+  },
+  "inputs/GEDI_L4B_AGBD_Sumatra.tif": {
+   "bytes": 59289,
+   "md5": "d731aa4049fa3729d1bf0de084ebcda2"
+  },
+  "inputs/L4A_Sumatra.gpkg": {
+   "bytes": 47017984,
+   "md5": "cfe97d22f4ba63861848450511881ede"
+  },
+  "inputs/agbd_1000m.tif": {
+   "bytes": 243377,
+   "md5": "e0dd36f4d740cffe38c7c2279fdc7e5b"
+  },
+  "inputs/agbd_100m.tif": {
+   "bytes": 23384958,
+   "md5": "2c568b66e2ffa25bcd4d6cf4de04c24e"
+  },
+  "inputs/agbd_500m.tif": {
+   "bytes": 965510,
+   "md5": "63afd8bdaf074ea0d4befbab37deb118"
+  },
+  "inputs/merged_downsampled-1000m_composite.tif": {
+   "bytes": 371732,
+   "md5": "cdc534567f7070efe04b27ab7bb77c89"
+  },
+  "inputs/merged_downsampled-100m_composite.tif": {
+   "bytes": 37099784,
+   "md5": "ba6a472f1d05064046e2e0c154736ffe"
+  },
+  "inputs/merged_downsampled-500m_composite.tif": {
+   "bytes": 1485224,
+   "md5": "65d0d5d6d6bdd5ff6a59d6ddf4eb8a11"
+  },
+  "outputs/kriging-sumatra_cci_gedi-gedi_50.tif": {
+   "bytes": 55644050,
+   "md5": "06e5f53ff773998f84f6373ac83c2d01"
+  },
+  "outputs/kriging-sumatra_downsampled_gedi_composite-gedi_50.tif": {
+   "bytes": 55644050,
+   "md5": "6d973ed53f08a2be5f61db478c607818"
+  },
+  "outputs/merged_downsampled-1000m_50_2500_dynamic.tif": {
+   "bytes": 557540,
+   "md5": "ebe12e5d5a90875dedab99613fef376b"
+  },
+  "outputs/merged_downsampled-100m_50_2500_dynamic.tif": {
+   "bytes": 55644050,
+   "md5": "989df04a41c66438658b83e0a65a0004"
+  },
+  "outputs/merged_downsampled-500m_50_2500_dynamic.tif": {
+   "bytes": 2228210,
+   "md5": "a3ad311e5fc0dabeda852b368dad4a7d"
+  },
+  "outputs/split_map-sumatra_cci_gedi.pkl": {
+   "bytes": 4636164,
+   "md5": "b20e24656c456557216463b9fc121ce7"
+  },
+  "outputs/split_map-sumatra_downsampled_gedi_composite.pkl": {
+   "bytes": 4636164,
+   "md5": "13a272caf665fd5ee935b20dbbf9cb7e"
+  },
+  "outputs/splits-sumatra_cci_gedi_0.3_0.2_25000_15.0_50-gedi.pkl": {
+   "bytes": 311739,
+   "md5": "e0e7c932f7b36bbb093c179edf8f85fa"
+  },
+  "outputs/splits-sumatra_downsampled_gedi_composite_0.3_0.2_25000_15.0_50-gedi.pkl": {
+   "bytes": 312114,
+   "md5": "0e71937ced93916bb03f10b3b96c0bb2"
+  }
+ }
+}

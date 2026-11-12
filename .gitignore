@@ -10,3 +10,15 @@ __pycache__/
 # uv / virtualenvs (uv.lock IS committed; the venv is not)
 .venv/
 venv/
+
+manuscript/
+# Figures written by src/sumatra/get_results.ipynb (regenerable)
+src/sumatra/figs/
+
+# Revision 2: rebuttal working files (analyses, runs, figures, supplied rasters)
+revision-v2/
+plots/
+
+# Sumatra data bundle: on the ETH Research Collection, fetched by src/sumatra/download_data.py (MANIFEST.json stays in git)
+src/sumatra/data/inputs/
+src/sumatra/data/outputs/

@@ -26,6 +26,7 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 import rasterio as rs
+from rasterio.transform import rowcol
 import geopandas as gpd
 import torch
 import gpytorch
@@ -444,12 +445,10 @@ def run_kriging_for_map(cfg, path_predictions, model_name, s2_tile, reference='g
     # Get the row/column indices of the GEDI footprints on the prediction grid
     width, height = pred_agb.shape[1], pred_agb.shape[0]
     print('height, width:', height, width)
-    with rs.open(path_predictions) as src:
-        def get_idx(geom, src) :
-            lon, lat = geom.x, geom.y
-            row_index, col_index = src.index(lon, lat)
-            return row_index, col_index
-        GEDI[['row_idx', 'col_idx']] = GEDI.apply(lambda row: get_idx(row['geometry'], src), axis = 1).apply(pd.Series)
+    # Use the transform of the array we actually krige (returned by load_dense_preds), NOT the
+    # file's own transform: for CCI the array is warped onto the reference grid (Revision 2 fix).
+    rows, cols = rowcol(transform, GEDI.geometry.x.values, GEDI.geometry.y.values)
+    GEDI['row_idx'], GEDI['col_idx'] = np.asarray(rows, dtype = int), np.asarray(cols, dtype = int)
 
     # Drop footprints outside the prediction, or where prediction/STD are undefined
     GEDI = GEDI[(GEDI['row_idx'] < height) & (GEDI['row_idx'] >= 0) & (GEDI['col_idx'] < width) & (GEDI['col_idx'] >= 0)]
@@ -533,6 +532,7 @@ def run_kriging_for_map(cfg, path_predictions, model_name, s2_tile, reference='g
 
     model = ExactGPModel(train_x, train_y, likelihood, ndims = train_x.shape[1], matern_nu = cfg.matern_nu)
     model.likelihood.noise = cfg.gaussian_noise
+    if cfg.noise_mode == 'fixed' : model.likelihood.noise_covar.raw_noise.requires_grad_(False)  # explicit (see F5)
 
     # Initialize the kernel lengthscales / outputscale
     lengthscales = []
@@ -559,6 +559,7 @@ def run_kriging_for_map(cfg, path_predictions, model_name, s2_tile, reference='g
     if best_model_state:
         model.load_state_dict(best_model_state)
         if cfg.SAVE_preds: torch.save(model.state_dict(), paths.checkpoint_state(model_name, make=True))
+    likelihood = model.likelihood  # the trained likelihood lives inside the (copied) model
     model.eval()
     likelihood.eval()
     print(f'    Done! In {time() - time_start} seconds.')
@@ -645,7 +646,7 @@ def run_kriging_for_map(cfg, path_predictions, model_name, s2_tile, reference='g
         print('Saving the corrected prediction...')
         count = 3 if cfg.COMPUTE_VAR else 2
         meta.update(count = count, dtype = 'float32', nodata = np.nan)
-        if 'cci' in model_name : meta.update({"height": height, "width": width})
+        assert (meta['height'], meta['width']) == corrected.shape, (meta['height'], meta['width'], corrected.shape)
         with rs.open(paths.corrected_tif(cfg.arch, cfg.year, cfg.ens_models, model_name, reference, cfg.stripe_size, ood=ood, make=True), 'w', **meta) as dst:
             dst.write(corrected, 1)
             dst.set_band_description(1, 'AGB')
